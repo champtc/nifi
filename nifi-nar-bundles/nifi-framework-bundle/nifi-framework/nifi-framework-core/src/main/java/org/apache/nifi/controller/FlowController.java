@@ -113,6 +113,7 @@ import org.apache.nifi.controller.serialization.FlowSynchronizer;
 import org.apache.nifi.controller.serialization.ScheduledStateLookup;
 import org.apache.nifi.controller.service.ControllerServiceNode;
 import org.apache.nifi.controller.service.ControllerServiceProvider;
+import org.apache.nifi.controller.service.StandardConfigurationContext;
 import org.apache.nifi.controller.service.StandardControllerServiceProvider;
 import org.apache.nifi.controller.state.manager.StandardStateManagerProvider;
 import org.apache.nifi.controller.state.server.ZooKeeperStateServer;
@@ -137,6 +138,7 @@ import org.apache.nifi.encrypt.StandardSensitiveValueEncoder;
 import org.apache.nifi.engine.FlowEngine;
 import org.apache.nifi.events.BulletinFactory;
 import org.apache.nifi.events.EventReporter;
+import org.apache.nifi.flow.Bundle;
 import org.apache.nifi.flowfile.FlowFilePrioritizer;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.groups.ProcessGroup;
@@ -151,6 +153,7 @@ import org.apache.nifi.parameter.ParameterLookup;
 import org.apache.nifi.parameter.StandardParameterContextManager;
 import org.apache.nifi.processor.Processor;
 import org.apache.nifi.processor.Relationship;
+import org.apache.nifi.processor.StandardProcessContext;
 import org.apache.nifi.provenance.ComponentIdentifierLookup;
 import org.apache.nifi.provenance.IdentifierLookup;
 import org.apache.nifi.provenance.ProvenanceAuthorizableFactory;
@@ -161,8 +164,8 @@ import org.apache.nifi.provenance.StandardProvenanceAuthorizableFactory;
 import org.apache.nifi.provenance.StandardProvenanceEventRecord;
 import org.apache.nifi.registry.VariableRegistry;
 import org.apache.nifi.registry.flow.FlowRegistryClient;
-import org.apache.nifi.registry.flow.VersionedConnection;
-import org.apache.nifi.registry.flow.VersionedProcessGroup;
+import org.apache.nifi.flow.VersionedConnection;
+import org.apache.nifi.flow.VersionedProcessGroup;
 import org.apache.nifi.registry.variable.MutableVariableRegistry;
 import org.apache.nifi.remote.HttpRemoteSiteListener;
 import org.apache.nifi.remote.RemoteGroupPort;
@@ -177,6 +180,7 @@ import org.apache.nifi.reporting.ReportingTask;
 import org.apache.nifi.reporting.Severity;
 import org.apache.nifi.reporting.StandardEventAccess;
 import org.apache.nifi.reporting.UserAwareEventAccess;
+import org.apache.nifi.repository.encryption.configuration.EncryptionProtocol;
 import org.apache.nifi.scheduling.SchedulingStrategy;
 import org.apache.nifi.security.util.SslContextFactory;
 import org.apache.nifi.security.util.StandardTlsConfiguration;
@@ -238,7 +242,10 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
     public static final String DEFAULT_CONTENT_REPO_IMPLEMENTATION = "org.apache.nifi.controller.repository.FileSystemRepository";
     public static final String DEFAULT_PROVENANCE_REPO_IMPLEMENTATION = "org.apache.nifi.provenance.VolatileProvenanceRepository";
     public static final String DEFAULT_SWAP_MANAGER_IMPLEMENTATION = "org.apache.nifi.controller.FileSystemSwapManager";
-    public static final String DEFAULT_COMPONENT_STATUS_REPO_IMPLEMENTATION = "org.apache.nifi.controller.status.history.VolatileComponentStatusRepository";
+
+    private static final String ENCRYPTED_PROVENANCE_REPO_IMPLEMENTATION = "org.apache.nifi.provenance.EncryptedWriteAheadProvenanceRepository";
+    private static final String ENCRYPTED_CONTENT_REPO_IMPLEMENTATION = "org.apache.nifi.controller.repository.crypto.EncryptedFileSystemRepository";
+    private static final String ENCRYPTED_SWAP_MANAGER_IMPLEMENTATION = "org.apache.nifi.controller.EncryptedFileSystemSwapManager";
 
     public static final String GRACEFUL_SHUTDOWN_PERIOD = "nifi.flowcontroller.graceful.shutdown.seconds";
     public static final long DEFAULT_GRACEFUL_SHUTDOWN_SECONDS = 10;
@@ -387,7 +394,8 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
             final BulletinRepository bulletinRepo,
             final VariableRegistry variableRegistry,
             final FlowRegistryClient flowRegistryClient,
-            final ExtensionManager extensionManager) {
+            final ExtensionManager extensionManager,
+            final StatusHistoryRepository statusHistoryRepository) {
 
         return new FlowController(
                 flowFileEventRepo,
@@ -404,7 +412,8 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
                 /* variable registry */ variableRegistry,
                 flowRegistryClient,
                 extensionManager,
-                null);
+                null,
+                statusHistoryRepository);
     }
 
     public static FlowController createClusteredInstance(
@@ -421,7 +430,8 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
             final VariableRegistry variableRegistry,
             final FlowRegistryClient flowRegistryClient,
             final ExtensionManager extensionManager,
-            final RevisionManager revisionManager) {
+            final RevisionManager revisionManager,
+            final StatusHistoryRepository statusHistoryRepository) {
 
         final FlowController flowController = new FlowController(
                 flowFileEventRepo,
@@ -438,7 +448,8 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
                 variableRegistry,
                 flowRegistryClient,
                 extensionManager,
-                revisionManager);
+                revisionManager,
+                statusHistoryRepository);
 
         return flowController;
     }
@@ -459,7 +470,8 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
             final VariableRegistry variableRegistry,
             final FlowRegistryClient flowRegistryClient,
             final ExtensionManager extensionManager,
-            final RevisionManager revisionManager) {
+            final RevisionManager revisionManager,
+            final StatusHistoryRepository statusHistoryRepository) {
 
         maxTimerDrivenThreads = new AtomicInteger(10);
         maxEventDrivenThreads = new AtomicInteger(1);
@@ -475,6 +487,7 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
         this.configuredForClustering = configuredForClustering;
         this.flowRegistryClient = flowRegistryClient;
         this.revisionManager = revisionManager;
+        this.statusHistoryRepository = statusHistoryRepository;
 
         try {
             // Form the container object from the properties
@@ -631,8 +644,6 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
         } else {
             zooKeeperStateServer = null;
         }
-
-        statusHistoryRepository = createStatusHistoryRepository();
 
         final boolean analyticsEnabled = Boolean.parseBoolean(nifiProperties.getProperty(NiFiProperties.ANALYTICS_PREDICTION_ENABLED, NiFiProperties.DEFAULT_ANALYTICS_PREDICTION_ENABLED));
 
@@ -817,7 +828,9 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
     }
 
     public FlowFileSwapManager createSwapManager() {
-        final String implementationClassName = nifiProperties.getProperty(NiFiProperties.FLOWFILE_SWAP_MANAGER_IMPLEMENTATION, DEFAULT_SWAP_MANAGER_IMPLEMENTATION);
+        final String implementationClassName = isEncryptionProtocolVersionConfigured(nifiProperties)
+                ? ENCRYPTED_SWAP_MANAGER_IMPLEMENTATION
+                : nifiProperties.getProperty(NiFiProperties.FLOWFILE_SWAP_MANAGER_IMPLEMENTATION, DEFAULT_SWAP_MANAGER_IMPLEMENTATION);
         if (implementationClassName == null) {
             return null;
         }
@@ -974,7 +987,9 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
         for (final ProcessorNode procNode : flowManager.getRootGroup().findAllProcessors()) {
             final Processor processor = procNode.getProcessor();
             try (final NarCloseable nc = NarCloseable.withComponentNarLoader(extensionManager, processor.getClass(), processor.getIdentifier())) {
-                ReflectionUtils.quietlyInvokeMethodsWithAnnotation(OnConfigurationRestored.class, processor);
+                final StandardProcessContext processContext = new StandardProcessContext(procNode, controllerServiceProvider, encryptor,
+                        getStateManagerProvider().getStateManager(processor.getIdentifier()), () -> false, this);
+                ReflectionUtils.quietlyInvokeMethodsWithAnnotation(OnConfigurationRestored.class, processor, processContext);
             }
         }
 
@@ -982,7 +997,8 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
             final ControllerService service = serviceNode.getControllerServiceImplementation();
 
             try (final NarCloseable nc = NarCloseable.withComponentNarLoader(extensionManager, service.getClass(), service.getIdentifier())) {
-                ReflectionUtils.quietlyInvokeMethodsWithAnnotation(OnConfigurationRestored.class, service);
+                final ConfigurationContext configurationContext = new StandardConfigurationContext(serviceNode, controllerServiceProvider, null, variableRegistry);
+                ReflectionUtils.quietlyInvokeMethodsWithAnnotation(OnConfigurationRestored.class, service, configurationContext);
             }
         }
 
@@ -990,7 +1006,7 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
             final ReportingTask task = taskNode.getReportingTask();
 
             try (final NarCloseable nc = NarCloseable.withComponentNarLoader(extensionManager, task.getClass(), task.getIdentifier())) {
-                ReflectionUtils.quietlyInvokeMethodsWithAnnotation(OnConfigurationRestored.class, task);
+                ReflectionUtils.quietlyInvokeMethodsWithAnnotation(OnConfigurationRestored.class, task, taskNode.getConfigurationContext());
             }
         }
     }
@@ -1139,13 +1155,16 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
         return startConnectablesAfterInitialization.contains(component) || startRemoteGroupPortsAfterInitialization.contains(component);
     }
 
-    private ContentRepository createContentRepository(final NiFiProperties properties) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
-        final String implementationClassName = properties.getProperty(NiFiProperties.CONTENT_REPOSITORY_IMPLEMENTATION, DEFAULT_CONTENT_REPO_IMPLEMENTATION);
+    private ContentRepository createContentRepository(final NiFiProperties properties) {
+        final String implementationClassName = isEncryptionProtocolVersionConfigured(properties)
+                ? ENCRYPTED_CONTENT_REPO_IMPLEMENTATION
+                : properties.getProperty(NiFiProperties.CONTENT_REPOSITORY_IMPLEMENTATION, DEFAULT_CONTENT_REPO_IMPLEMENTATION);
         if (implementationClassName == null) {
             throw new RuntimeException("Cannot create Content Repository because the NiFi Properties is missing the following property: "
                     + NiFiProperties.CONTENT_REPOSITORY_IMPLEMENTATION);
         }
 
+        LOG.info("Creating Content Repository [{}]", implementationClassName);
         try {
             final ContentRepository contentRepo = NarThreadContextClassLoader.createInstance(extensionManager, implementationClassName, ContentRepository.class, properties);
             synchronized (contentRepo) {
@@ -1157,31 +1176,18 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
         }
     }
 
-    private ProvenanceRepository createProvenanceRepository(final NiFiProperties properties) throws InstantiationException, IllegalAccessException, ClassNotFoundException {
-        final String implementationClassName = properties.getProperty(NiFiProperties.PROVENANCE_REPO_IMPLEMENTATION_CLASS, DEFAULT_PROVENANCE_REPO_IMPLEMENTATION);
-        if (implementationClassName == null) {
+    private ProvenanceRepository createProvenanceRepository(final NiFiProperties properties) {
+        final String implementationClassName = isEncryptionProtocolVersionConfigured(properties)
+                ? ENCRYPTED_PROVENANCE_REPO_IMPLEMENTATION
+                : properties.getProperty(NiFiProperties.PROVENANCE_REPO_IMPLEMENTATION_CLASS, DEFAULT_PROVENANCE_REPO_IMPLEMENTATION);
+        if (StringUtils.isBlank(implementationClassName)) {
             throw new RuntimeException("Cannot create Provenance Repository because the NiFi Properties is missing the following property: "
                     + NiFiProperties.PROVENANCE_REPO_IMPLEMENTATION_CLASS);
         }
 
+        LOG.info("Creating Provenance Repository [{}]", implementationClassName);
         try {
             return NarThreadContextClassLoader.createInstance(extensionManager, implementationClassName, ProvenanceRepository.class, properties);
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private StatusHistoryRepository createStatusHistoryRepository() {
-        final String implementationClassName = nifiProperties.getProperty(NiFiProperties.COMPONENT_STATUS_REPOSITORY_IMPLEMENTATION, DEFAULT_COMPONENT_STATUS_REPO_IMPLEMENTATION);
-        if (implementationClassName == null) {
-            throw new RuntimeException("Cannot create Status History Repository because the NiFi Properties is missing the following property: "
-                    + NiFiProperties.COMPONENT_STATUS_REPOSITORY_IMPLEMENTATION);
-        }
-
-        try {
-            final StatusHistoryRepository repository = NarThreadContextClassLoader.createInstance(extensionManager, implementationClassName, StatusHistoryRepository.class, nifiProperties);
-            repository.start();
-            return repository;
         } catch (final Exception e) {
             throw new RuntimeException(e);
         }
@@ -1610,7 +1616,7 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
     // Snippet
     //
 
-    private void verifyBundleInVersionedFlow(final org.apache.nifi.registry.flow.Bundle requiredBundle, final Set<BundleCoordinate> supportedBundles) {
+    private void verifyBundleInVersionedFlow(final Bundle requiredBundle, final Set<BundleCoordinate> supportedBundles) {
         final BundleCoordinate requiredCoordinate = new BundleCoordinate(requiredBundle.getGroup(), requiredBundle.getArtifact(), requiredBundle.getVersion());
         if (!supportedBundles.contains(requiredCoordinate)) {
             throw new IllegalStateException("Unsupported bundle: " + requiredCoordinate);
@@ -3093,6 +3099,11 @@ public class FlowController implements ReportingTaskProvider, Authorizable, Node
 
     public FlowFileEventRepository getFlowFileEventRepository() {
         return flowFileEventRepository;
+    }
+
+    private boolean isEncryptionProtocolVersionConfigured(final NiFiProperties properties) {
+        final String version = properties.getProperty(NiFiProperties.REPOSITORY_ENCRYPTION_PROTOCOL_VERSION);
+        return Integer.toString(EncryptionProtocol.VERSION_1.getVersionNumber()).equals(version);
     }
 
     private static class HeartbeatBean {

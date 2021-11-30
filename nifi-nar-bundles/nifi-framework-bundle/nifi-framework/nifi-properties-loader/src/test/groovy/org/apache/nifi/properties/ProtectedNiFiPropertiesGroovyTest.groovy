@@ -44,7 +44,8 @@ class ProtectedNiFiPropertiesGroovyTest extends GroovyTestCase {
             "nifi.provenance.repository.encryption.key",
             "nifi.provenance.repository.encryption.key.provider.password",
             "nifi.flowfile.repository.encryption.key.provider.password",
-            "nifi.content.repository.encryption.key.provider.password"
+            "nifi.content.repository.encryption.key.provider.password",
+            "nifi.repository.encryption.key.provider.keystore.password"
     ]
 
     final def COMMON_ADDITIONAL_SENSITIVE_PROPERTIES = [
@@ -451,7 +452,7 @@ class ProtectedNiFiPropertiesGroovyTest extends GroovyTestCase {
                 .findAll { String key, String scheme -> scheme == spp.identifierKey }
                 .keySet().collect { String key ->
             try {
-                String rawValue = spp.unprotect(properties.getProperty(key))
+                String rawValue = spp.unprotect(properties.getProperty(key), ProtectedPropertyContext.defaultContext(key))
                 return
             } catch (SensitivePropertyProtectionException e) {
                 logger.expected("Caught a malformed value for ${key}")

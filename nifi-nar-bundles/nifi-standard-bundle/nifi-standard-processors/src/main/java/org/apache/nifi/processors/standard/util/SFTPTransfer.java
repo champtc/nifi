@@ -90,6 +90,8 @@ import java.util.stream.Collectors;
 import static org.apache.nifi.processors.standard.util.FTPTransfer.createComponentProxyConfigSupplier;
 
 public class SFTPTransfer implements FileTransfer {
+    private static final int KEEP_ALIVE_INTERVAL_SECONDS = 5;
+
     private static final Set<String> DEFAULT_KEY_ALGORITHM_NAMES;
     private static final Set<String> DEFAULT_CIPHER_NAMES;
     private static final Set<String> DEFAULT_MESSAGE_AUTHENTICATION_CODE_NAMES;
@@ -162,7 +164,7 @@ public class SFTPTransfer implements FileTransfer {
         .build();
     public static final PropertyDescriptor USE_KEEPALIVE_ON_TIMEOUT = new PropertyDescriptor.Builder()
         .name("Send Keep Alive On Timeout")
-        .description("Indicates whether or not to send a single Keep Alive message when SSH socket times out")
+        .description("Send a Keep Alive message every 5 seconds up to 5 times for an overall timeout of 25 seconds.")
         .allowableValues("true", "false")
         .defaultValue("true")
         .required(true)
@@ -261,7 +263,7 @@ public class SFTPTransfer implements FileTransfer {
     }
 
     @Override
-    public List<FileInfo> getListing() throws IOException {
+    public List<FileInfo> getListing(final boolean applyFilters) throws IOException {
         final String path = ctx.getProperty(FileTransfer.REMOTE_PATH).evaluateAttributeExpressions().getValue();
         final int depth = 0;
 
@@ -275,11 +277,12 @@ public class SFTPTransfer implements FileTransfer {
         }
 
         final List<FileInfo> listing = new ArrayList<>(1000);
-        getListing(path, depth, maxResults, listing);
+        getListing(path, depth, maxResults, listing, applyFilters);
         return listing;
     }
 
-    protected void getListing(final String path, final int depth, final int maxResults, final List<FileInfo> listing) throws IOException {
+    protected void getListing(final String path, final int depth, final int maxResults, final List<FileInfo> listing,
+                              final boolean applyFilters) throws IOException {
         if (maxResults < 1 || listing.size() >= maxResults) {
             return;
         }
@@ -344,8 +347,8 @@ public class SFTPTransfer implements FileTransfer {
                 }
 
                 // if is not a directory and is not a link and it matches FILE_FILTER_REGEX - then let's add it
-                if (!entry.isDirectory() && !(entry.getAttributes().getType() == FileMode.Type.SYMLINK) && isPathMatch) {
-                    if (pattern == null || pattern.matcher(entryFilename).matches()) {
+                if (!entry.isDirectory() && !(entry.getAttributes().getType() == FileMode.Type.SYMLINK) && (!applyFilters || isPathMatch)) {
+                    if (pattern == null || !applyFilters || pattern.matcher(entryFilename).matches()) {
                         listing.add(newFileInfo(entry, path));
                     }
                 }
@@ -377,7 +380,7 @@ public class SFTPTransfer implements FileTransfer {
             final String newFullForwardPath = newFullPath.getPath().replace("\\", "/");
 
             try {
-                getListing(newFullForwardPath, depth + 1, maxResults, listing);
+                getListing(newFullForwardPath, depth + 1, maxResults, listing, applyFilters);
             } catch (final IOException e) {
                 logger.error("Unable to get listing from " + newFullForwardPath + "; skipping", e);
             }
@@ -570,6 +573,20 @@ public class SFTPTransfer implements FileTransfer {
         }
     };
 
+    private static final KeepAliveProvider DEFAULT_KEEP_ALIVE_PROVIDER = new KeepAliveProvider() {
+        @Override
+        public KeepAlive provide(final ConnectionImpl connection) {
+            final KeepAlive keepAlive = KeepAliveProvider.KEEP_ALIVE.provide(connection);
+            keepAlive.setKeepAliveInterval(KEEP_ALIVE_INTERVAL_SECONDS);
+            return keepAlive;
+        }
+    };
+
+    protected KeepAliveProvider getKeepAliveProvider() {
+        final boolean useKeepAliveOnTimeout = ctx.getProperty(USE_KEEPALIVE_ON_TIMEOUT).asBoolean();
+        return useKeepAliveOnTimeout ? DEFAULT_KEEP_ALIVE_PROVIDER : NO_OP_KEEP_ALIVE;
+    }
+
     protected SFTPClient getSFTPClient(final FlowFile flowFile) throws IOException {
         // If the client is already initialized then compare the host that the client is connected to with the current
         // host from the properties/flow-file, and if different then we need to close and reinitialize, if same we can reuse
@@ -586,16 +603,8 @@ public class SFTPTransfer implements FileTransfer {
         }
 
         // Initialize a new SSHClient...
-
-        // If use keep-alive is set then set the provider which sends max of 5 keep-alives, otherwise set the no-op provider
         final DefaultConfig sshClientConfig = new DefaultConfig();
-        final boolean useKeepAliveOnTimeout = ctx.getProperty(USE_KEEPALIVE_ON_TIMEOUT).asBoolean();
-        if (useKeepAliveOnTimeout) {
-            sshClientConfig.setKeepAliveProvider(KeepAliveProvider.KEEP_ALIVE);
-        } else {
-            sshClientConfig.setKeepAliveProvider(NO_OP_KEEP_ALIVE);
-        }
-
+        sshClientConfig.setKeepAliveProvider(getKeepAliveProvider());
         updateConfigAlgorithms(sshClientConfig);
 
         final SSHClient sshClient = new SSHClient(sshClientConfig);

@@ -209,7 +209,7 @@ public final class ConfigTransformer {
 
             orderedProperties.setProperty("nifi.database.directory", "./database_repository", System.lineSeparator() + "# H2 Settings");
             orderedProperties.setProperty("nifi.h2.url.append", ";LOCK_TIMEOUT=25000;WRITE_DELAY=0;AUTO_SERVER=FALSE");
-            orderedProperties.setProperty("nifi.flowfile.repository.implementation", "org.apache.nifi.controller.repository.WriteAheadFlowFileRepository",
+            orderedProperties.setProperty("nifi.flowfile.repository.implementation", String.valueOf(flowfileRepoSchema.getFlowFileRepository()),
                     System.lineSeparator() + "# FlowFile Repository");
             orderedProperties.setProperty("nifi.flowfile.repository.directory", "./flowfile_repository");
             orderedProperties.setProperty("nifi.flowfile.repository.partitions", String.valueOf(flowfileRepoSchema.getPartitions()));
@@ -261,7 +261,6 @@ public final class ConfigTransformer {
             final String notnullSensitivePropertiesKey = sensitivePropertiesKey != null ? sensitivePropertiesKey : "";
             orderedProperties.setProperty("nifi.sensitive.props.key", notnullSensitivePropertiesKey, System.lineSeparator() + "# security properties #");
             orderedProperties.setProperty("nifi.sensitive.props.algorithm", sensitiveProperties.getAlgorithm());
-            orderedProperties.setProperty("nifi.sensitive.props.provider", sensitiveProperties.getProvider());
 
             orderedProperties.setProperty("nifi.security.keystore", securityProperties.getKeystore(), "");
             orderedProperties.setProperty("nifi.security.keystoreType", securityProperties.getKeystoreType());

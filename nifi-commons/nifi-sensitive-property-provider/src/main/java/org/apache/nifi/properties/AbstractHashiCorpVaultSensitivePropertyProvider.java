@@ -43,7 +43,7 @@ public abstract class AbstractHashiCorpVaultSensitivePropertyProvider extends Ab
         if (hasRequiredVaultProperties()) {
             try {
                 vaultCommunicationService = new StandardHashiCorpVaultCommunicationService(getVaultPropertySource(vaultBootstrapConfFilename));
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new SensitivePropertyProtectionException("Error configuring HashiCorpVaultCommunicationService", e);
             }
         } else {
@@ -64,7 +64,7 @@ public abstract class AbstractHashiCorpVaultSensitivePropertyProvider extends Ab
             try {
                 vaultBootstrapProperties = AbstractBootstrapPropertiesLoader.loadBootstrapProperties(
                         Paths.get(vaultBootstrapConfFilename), VAULT_PREFIX);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 throw new SensitivePropertyProtectionException("Could not load " + vaultBootstrapConfFilename, e);
             }
         } else {
@@ -97,14 +97,6 @@ public abstract class AbstractHashiCorpVaultSensitivePropertyProvider extends Ab
         return hasRequiredVaultProperties();
     }
 
-    /**
-     * Returns the Vault-specific bootstrap properties (e.g., bootstrap-vault.properties)
-     * @return The Vault-specific bootstrap properties
-     */
-    protected BootstrapProperties getVaultBootstrapProperties() {
-        return vaultBootstrapProperties;
-    }
-
     private boolean hasRequiredVaultProperties() {
         return vaultBootstrapProperties != null
                 && (vaultBootstrapProperties.getProperty(VaultConfigurationKey.URI.getKey()) != null)
@@ -116,7 +108,9 @@ public abstract class AbstractHashiCorpVaultSensitivePropertyProvider extends Ab
      * @param vaultBootstrapProperties The Vault-specific bootstrap properties
      * @return true if the relevant Secrets Engine-specific properties are configured
      */
-    protected abstract boolean hasRequiredSecretsEngineProperties(final BootstrapProperties vaultBootstrapProperties);
+    protected boolean hasRequiredSecretsEngineProperties(final BootstrapProperties vaultBootstrapProperties) {
+        return getSecretsEnginePath(vaultBootstrapProperties) != null;
+    }
 
     /**
      * Returns the key used to identify the provider implementation in {@code nifi.properties},
@@ -129,4 +123,9 @@ public abstract class AbstractHashiCorpVaultSensitivePropertyProvider extends Ab
         return getProtectionScheme().getIdentifier(path);
     }
 
+    /**
+     * No cleanup necessary
+     */
+    @Override
+    public void cleanUp() { }
 }

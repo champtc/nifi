@@ -23,6 +23,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.file.DataFileStream;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
@@ -31,7 +32,6 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.util.Utf8;
-import org.apache.nifi.schema.access.SchemaNotFoundException;
 import org.apache.nifi.serialization.SimpleRecordSchema;
 import org.apache.nifi.serialization.record.DataType;
 import org.apache.nifi.serialization.record.MapRecord;
@@ -52,13 +52,11 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -107,7 +105,25 @@ public class TestAvroTypeUtil {
     }
 
     @Test
-    public void testCreateAvroSchemaPrimitiveTypes() throws SchemaNotFoundException {
+    public void testAvroDefaultValueWithNoFieldInRecordOrSchema() throws IOException {
+        final List<RecordField> fields = new ArrayList<>();
+        fields.add(new RecordField("name", RecordFieldType.STRING.getDataType()));
+        final RecordSchema personSchema = new SimpleRecordSchema(fields);
+
+        final org.apache.nifi.serialization.record.Record record = new MapRecord(personSchema, Collections.singletonMap("name", "John Doe"));
+        final Schema avroSchema = SchemaBuilder.record("person").namespace("nifi")
+            .fields()
+                .requiredString("name")
+                .name("color").type().stringType().stringDefault("blue")
+            .endRecord();
+
+        final GenericRecord avroRecord = AvroTypeUtil.createAvroRecord(record, avroSchema);
+        assertEquals("John Doe", avroRecord.get("name"));
+        assertEquals("blue", avroRecord.get("color"));
+    }
+
+    @Test
+    public void testCreateAvroSchemaPrimitiveTypes() {
         final List<RecordField> fields = new ArrayList<>();
         fields.add(new RecordField("int", RecordFieldType.INT.getDataType()));
         fields.add(new RecordField("long", RecordFieldType.LONG.getDataType()));
@@ -521,17 +537,15 @@ public class TestAvroTypeUtil {
 
     @Test
     public void testDateConversion() {
-        final Calendar c = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-        c.set(2019, Calendar.JANUARY, 1, 0, 0, 0);
-        c.set(Calendar.MILLISECOND, 0);
-        final long epochMillis = c.getTimeInMillis();
+        final String date = "2019-01-01";
 
         final LogicalTypes.Date dateType = LogicalTypes.date();
         final Schema fieldSchema = Schema.create(Type.INT);
         dateType.addToSchema(fieldSchema);
-        final Object convertedValue = AvroTypeUtil.convertToAvroObject(new Date(epochMillis), fieldSchema);
+        final Object convertedValue = AvroTypeUtil.convertToAvroObject(Date.valueOf(date), fieldSchema);
         assertTrue(convertedValue instanceof Integer);
-        assertEquals(LocalDate.of(2019, 1, 1).toEpochDay(), (int) convertedValue);
+        final int epochDay = (int) LocalDate.parse(date).toEpochDay();
+        assertEquals(epochDay, convertedValue);
     }
 
     @Test

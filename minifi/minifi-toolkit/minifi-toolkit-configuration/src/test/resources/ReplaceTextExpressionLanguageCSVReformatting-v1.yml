@@ -23,6 +23,7 @@ Core Properties:
   bored yield duration: 10 millis
   max concurrent threads: 1
 FlowFile Repository:
+  implementation: org.apache.nifi.controller.repository.WriteAheadFlowFileRepository
   partitions: 256
   checkpoint interval: 2 mins
   always sync: false
@@ -53,7 +54,6 @@ Security Properties:
   Sensitive Props:
     key:
     algorithm: PBEWITHMD5AND256BITAES-CBC-OPENSSL
-    provider: BC
 Processors:
 - name: Generate Empty File
   class: org.apache.nifi.processors.standard.GenerateFlowFile
