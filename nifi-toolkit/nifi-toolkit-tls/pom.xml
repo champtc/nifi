@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-toolkit</artifactId>
-        <version>1.15.1</version>
+        <version>1.15.4-SNAPSHOT</version>
     </parent>
     <artifactId>nifi-toolkit-tls</artifactId>
     <description>Tooling to make tls configuration easier</description>
@@ -26,18 +26,18 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-properties</artifactId>
-            <version>1.15.1</version>
+            <version>1.15.4-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-security-utils</artifactId>
-            <version>1.15.1</version>
+            <version>1.15.4-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-resources</artifactId>
             <scope>provided</scope>
-            <version>1.15.1</version>
+            <version>1.15.4-SNAPSHOT</version>
             <classifier>resources</classifier>
             <type>zip</type>
         </dependency>
@@ -86,6 +86,16 @@
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
             <version>4.5.5</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jcl-over-slf4j</artifactId>
         </dependency>
     </dependencies>
     <build>
