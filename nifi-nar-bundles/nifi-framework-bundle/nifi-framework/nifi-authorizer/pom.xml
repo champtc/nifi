@@ -17,7 +17,7 @@
     <parent>
         <artifactId>nifi-framework</artifactId>
         <groupId>org.apache.nifi</groupId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -148,12 +148,25 @@
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-properties-loader</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.apache.nifi</groupId>
+            <artifactId>nifi-property-protection-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.nifi</groupId>
+            <artifactId>nifi-property-protection-loader</artifactId>
+        </dependency>
 
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-mock-authorizer</artifactId>
-            <version>1.15.4-SNAPSHOT</version>
+            <version>1.16.4-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.nifi</groupId>
+            <artifactId>nifi-property-protection-factory</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -170,4 +183,8 @@
         </dependency>
     </dependencies>
 
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

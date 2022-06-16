@@ -146,7 +146,6 @@ import org.apache.nifi.registry.flow.FlowRegistry;
 import org.apache.nifi.registry.flow.VersionControlInformation;
 import org.apache.nifi.registry.flow.VersionedFlowState;
 import org.apache.nifi.registry.flow.VersionedFlowStatus;
-import org.apache.nifi.registry.flow.diff.DifferenceType;
 import org.apache.nifi.registry.flow.diff.FlowComparison;
 import org.apache.nifi.registry.flow.diff.FlowDifference;
 import org.apache.nifi.registry.flow.mapping.InstantiatedVersionedComponent;
@@ -709,7 +708,7 @@ public final class DtoFactory {
         dto.setBackPressureObjectThreshold(flowFileQueue.getBackPressureObjectThreshold());
         dto.setBackPressureDataSizeThreshold(flowFileQueue.getBackPressureDataSizeThreshold());
         dto.setFlowFileExpiration(flowFileQueue.getFlowFileExpiration());
-        dto.setPrioritizers(new ArrayList<String>());
+        dto.setPrioritizers(new ArrayList<>());
         for (final FlowFilePrioritizer comparator : flowFileQueue.getPriorities()) {
             dto.getPrioritizers().add(comparator.getClass().getCanonicalName());
         }
@@ -718,7 +717,7 @@ public final class DtoFactory {
         for (final Relationship selectedRelationship : connection.getRelationships()) {
             if (!Relationship.ANONYMOUS.equals(selectedRelationship)) {
                 if (dto.getSelectedRelationships() == null) {
-                    dto.setSelectedRelationships(new TreeSet<String>(Collator.getInstance(Locale.US)));
+                    dto.setSelectedRelationships(new TreeSet<>(Collator.getInstance(Locale.US)));
                 }
 
                 dto.getSelectedRelationships().add(selectedRelationship.getName());
@@ -729,7 +728,7 @@ public final class DtoFactory {
         for (final Relationship availableRelationship : connection.getSource().getRelationships()) {
             if (!Relationship.ANONYMOUS.equals(availableRelationship)) {
                 if (dto.getAvailableRelationships() == null) {
-                    dto.setAvailableRelationships(new TreeSet<String>(Collator.getInstance(Locale.US)));
+                    dto.setAvailableRelationships(new TreeSet<>(Collator.getInstance(Locale.US)));
                 }
 
                 dto.getAvailableRelationships().add(availableRelationship.getName());
@@ -812,6 +811,7 @@ public final class DtoFactory {
         dto.setLabel(label.getValue());
         dto.setParentGroupId(label.getProcessGroup().getIdentifier());
         dto.setVersionedComponentId(label.getVersionedComponentId().orElse(null));
+        dto.setzIndex(label.getZIndex());
 
         return dto;
     }
@@ -1178,6 +1178,7 @@ public final class DtoFactory {
 
         snapshot.setFlowFilesQueued(connectionStatus.getQueuedCount());
         snapshot.setBytesQueued(connectionStatus.getQueuedBytes());
+        snapshot.setFlowFileAvailability(connectionStatus.getFlowFileAvailability().name());
 
         snapshot.setFlowFilesIn(connectionStatus.getInputCount());
         snapshot.setBytesIn(connectionStatus.getInputBytes());
@@ -1870,7 +1871,7 @@ public final class DtoFactory {
         dto.setName(group.getName());
         dto.setPosition(createPositionDto(group.getPosition()));
         dto.setComments(group.getComments());
-        dto.setTransmitting(group.isTransmitting());
+        dto.setTransmitting(group.isConfiguredToTransmit());
         dto.setCommunicationsTimeout(group.getCommunicationsTimeout());
         dto.setYieldDuration(group.getYieldDuration());
         dto.setParentGroupId(group.getProcessGroup().getIdentifier());
@@ -2547,39 +2548,14 @@ public final class DtoFactory {
     }
 
 
-    public Set<ComponentDifferenceDTO> createComponentDifferenceDtos(final FlowComparison comparison, final FlowManager flowManager) {
+    public Set<ComponentDifferenceDTO> createComponentDifferenceDtosForLocalModifications(final FlowComparison comparison, final VersionedProcessGroup localGroup, final FlowManager flowManager) {
         final Map<ComponentDifferenceDTO, List<DifferenceDTO>> differencesByComponent = new HashMap<>();
 
         final Map<String, VersionedProcessGroup> versionedGroups = flattenProcessGroups(comparison.getFlowA().getContents());
 
         for (final FlowDifference difference : comparison.getDifferences()) {
-            // Ignore these as local differences for now because we can't do anything with it
-            if (difference.getDifferenceType() == DifferenceType.BUNDLE_CHANGED) {
-                continue;
-            }
-
-            // Ignore differences that are the result of the Versioned Flow not having a Scheduled State and the newer flow being "ENABLED". We do this because
-            // Scheduled State was not always part of the Versioned Flow - it was always assumed to be ENABLED. We don't want flows that were previously stored in this
-            // format to now be considered different than the local flow.
-            if (FlowDifferenceFilters.isScheduledStateNew(difference)) {
-                continue;
-            }
-
-            // Ignore differences for adding remote ports
-            if (FlowDifferenceFilters.isAddedOrRemovedRemotePort(difference)) {
-                continue;
-            }
-
-            // Ignore name changes to public ports
-            if (FlowDifferenceFilters.isPublicPortNameChange(difference)) {
-                continue;
-            }
-
-            if (FlowDifferenceFilters.isIgnorableVersionedFlowCoordinateChange(difference)) {
-                continue;
-            }
-
-            if (FlowDifferenceFilters.isNewPropertyWithDefaultValue(difference, flowManager)) {
+            // Ignore any environment-specific change
+            if (FlowDifferenceFilters.isEnvironmentalChange(difference, localGroup, flowManager)) {
                 continue;
             }
 
@@ -2632,7 +2608,7 @@ public final class DtoFactory {
 
         if (component instanceof InstantiatedVersionedComponent) {
             final InstantiatedVersionedComponent instantiatedComponent = (InstantiatedVersionedComponent) component;
-            dto.setComponentId(instantiatedComponent.getInstanceId());
+            dto.setComponentId(instantiatedComponent.getInstanceIdentifier());
             dto.setProcessGroupId(instantiatedComponent.getInstanceGroupId());
         } else {
             dto.setComponentId(component.getIdentifier());
@@ -2675,43 +2651,43 @@ public final class DtoFactory {
     public Map<String, String> createVersionControlComponentMappingDto(final InstantiatedVersionedProcessGroup group) {
         final Map<String, String> mapping = new HashMap<>();
 
-        mapping.put(group.getInstanceId(), group.getIdentifier());
+        mapping.put(group.getInstanceIdentifier(), group.getIdentifier());
         group.getProcessors().stream()
             .map(proc -> (InstantiatedVersionedProcessor) proc)
-            .forEach(proc -> mapping.put(proc.getInstanceId(), proc.getIdentifier()));
+            .forEach(proc -> mapping.put(proc.getInstanceIdentifier(), proc.getIdentifier()));
         group.getFunnels().stream()
             .map(funnel -> (InstantiatedVersionedFunnel) funnel)
-            .forEach(funnel -> mapping.put(funnel.getInstanceId(), funnel.getIdentifier()));
+            .forEach(funnel -> mapping.put(funnel.getInstanceIdentifier(), funnel.getIdentifier()));
         group.getInputPorts().stream()
             .map(port -> (InstantiatedVersionedPort) port)
-            .forEach(port -> mapping.put(port.getInstanceId(), port.getIdentifier()));
+            .forEach(port -> mapping.put(port.getInstanceIdentifier(), port.getIdentifier()));
         group.getOutputPorts().stream()
             .map(port -> (InstantiatedVersionedPort) port)
-            .forEach(port -> mapping.put(port.getInstanceId(), port.getIdentifier()));
+            .forEach(port -> mapping.put(port.getInstanceIdentifier(), port.getIdentifier()));
         group.getControllerServices().stream()
             .map(service -> (InstantiatedVersionedControllerService) service)
-            .forEach(service -> mapping.put(service.getInstanceId(), service.getIdentifier()));
+            .forEach(service -> mapping.put(service.getInstanceIdentifier(), service.getIdentifier()));
         group.getLabels().stream()
             .map(label -> (InstantiatedVersionedLabel) label)
-            .forEach(label -> mapping.put(label.getInstanceId(), label.getIdentifier()));
+            .forEach(label -> mapping.put(label.getInstanceIdentifier(), label.getIdentifier()));
         group.getConnections().stream()
             .map(conn -> (InstantiatedVersionedConnection) conn)
-            .forEach(conn -> mapping.put(conn.getInstanceId(), conn.getIdentifier()));
+            .forEach(conn -> mapping.put(conn.getInstanceIdentifier(), conn.getIdentifier()));
         group.getRemoteProcessGroups().stream()
             .map(rpg -> (InstantiatedVersionedRemoteProcessGroup) rpg)
             .forEach(rpg -> {
-                mapping.put(rpg.getInstanceId(), rpg.getIdentifier());
+                mapping.put(rpg.getInstanceIdentifier(), rpg.getIdentifier());
 
                 if (rpg.getInputPorts() != null) {
                     rpg.getInputPorts().stream()
                         .map(port -> (InstantiatedVersionedRemoteGroupPort) port)
-                        .forEach(port -> mapping.put(port.getInstanceId(), port.getIdentifier()));
+                        .forEach(port -> mapping.put(port.getInstanceIdentifier(), port.getIdentifier()));
                 }
 
                 if (rpg.getOutputPorts() != null) {
                     rpg.getOutputPorts().stream()
                         .map(port -> (InstantiatedVersionedRemoteGroupPort) port)
-                        .forEach(port -> mapping.put(port.getInstanceId(), port.getIdentifier()));
+                        .forEach(port -> mapping.put(port.getInstanceIdentifier(), port.getIdentifier()));
                 }
             });
 
@@ -3181,6 +3157,7 @@ public final class DtoFactory {
             relationshipDTO.setDescription(rel.getDescription());
             relationshipDTO.setName(rel.getName());
             relationshipDTO.setAutoTerminate(node.isAutoTerminated(rel));
+            relationshipDTO.setRetry(node.isRelationshipRetried(rel));
             relationships.add(relationshipDTO);
         }
 
@@ -4020,6 +3997,11 @@ public final class DtoFactory {
         dto.setSchedulingStrategy(procNode.getSchedulingStrategy().name());
         dto.setExecutionNode(procNode.getExecutionNode().name());
 
+       dto.setBackoffMechanism(procNode.getBackoffMechanism().name());
+       dto.setMaxBackoffPeriod(procNode.getMaxBackoffPeriod());
+       dto.setRetriedRelationships(procNode.getRetriedRelationships());
+       dto.setRetryCount(procNode.getRetryCount());
+
         return dto;
     }
 
@@ -4122,6 +4104,7 @@ public final class DtoFactory {
         copy.setWidth(original.getWidth());
         copy.setHeight(original.getHeight());
         copy.setVersionedComponentId(original.getVersionedComponentId());
+        copy.setzIndex(original.getzIndex());
 
         return copy;
     }
@@ -4250,6 +4233,10 @@ public final class DtoFactory {
         copy.setDefaultConcurrentTasks(original.getDefaultConcurrentTasks());
         copy.setDefaultSchedulingPeriod(original.getDefaultSchedulingPeriod());
         copy.setLossTolerant(original.isLossTolerant());
+        copy.setBackoffMechanism(original.getBackoffMechanism());
+        copy.setMaxBackoffPeriod(original.getMaxBackoffPeriod());
+        copy.setRetryCount(original.getRetryCount());
+        copy.setRetriedRelationships(original.getRetriedRelationships());
 
         return copy;
     }

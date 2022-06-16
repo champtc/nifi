@@ -19,17 +19,17 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
 
     <groupId>org.apache.nifi</groupId>
     <artifactId>nifi-kudu-bundle</artifactId>
-    <version>1.15.4-SNAPSHOT</version>
+    <version>1.16.4-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <properties>
         <exclude.tests>None</exclude.tests>
-        <kudu.version>1.15.0</kudu.version>
+        <kudu.version>1.16.0</kudu.version>
     </properties>
 
     <modules>
@@ -37,4 +37,8 @@
         <module>nifi-kudu-nar</module>
         <module>nifi-kudu-controller-service</module>
     </modules>
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

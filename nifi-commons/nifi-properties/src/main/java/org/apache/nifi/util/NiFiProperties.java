@@ -55,6 +55,7 @@ public class NiFiProperties extends ApplicationProperties {
     // core properties
     public static final String PROPERTIES_FILE_PATH = "nifi.properties.file.path";
     public static final String FLOW_CONFIGURATION_FILE = "nifi.flow.configuration.file";
+    public static final String FLOW_CONFIGURATION_JSON_FILE = "nifi.flow.configuration.json.file";
     public static final String FLOW_CONFIGURATION_ARCHIVE_ENABLED = "nifi.flow.configuration.archive.enabled";
     public static final String FLOW_CONFIGURATION_ARCHIVE_DIR = "nifi.flow.configuration.archive.dir";
     public static final String FLOW_CONFIGURATION_ARCHIVE_MAX_TIME = "nifi.flow.configuration.archive.max.time";
@@ -87,6 +88,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String PROCESSOR_SCHEDULING_TIMEOUT = "nifi.processor.scheduling.timeout";
     public static final String BACKPRESSURE_COUNT = "nifi.queue.backpressure.count";
     public static final String BACKPRESSURE_SIZE = "nifi.queue.backpressure.size";
+    public static final String LISTENER_BOOTSTRAP_PORT = "nifi.listener.bootstrap.port";
 
     // Encryption Properties for all Repositories
     public static final String REPOSITORY_ENCRYPTION_PROTOCOL_VERSION = "nifi.repository.encryption.protocol.version";
@@ -186,6 +188,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String SECURITY_USER_OIDC_READ_TIMEOUT = "nifi.security.user.oidc.read.timeout";
     public static final String SECURITY_USER_OIDC_CLIENT_ID = "nifi.security.user.oidc.client.id";
     public static final String SECURITY_USER_OIDC_CLIENT_SECRET = "nifi.security.user.oidc.client.secret";
+    public static final String SECURITY_USER_OIDC_TRUSTSTORE_STRATEGY = "nifi.security.user.oidc.truststore.strategy";
     public static final String SECURITY_USER_OIDC_PREFERRED_JWSALGORITHM = "nifi.security.user.oidc.preferred.jwsalgorithm";
     public static final String SECURITY_USER_OIDC_ADDITIONAL_SCOPES = "nifi.security.user.oidc.additional.scopes";
     public static final String SECURITY_USER_OIDC_CLAIM_IDENTIFYING_USER = "nifi.security.user.oidc.claim.identifying.user";
@@ -236,6 +239,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String WEB_REQUEST_TIMEOUT = "nifi.web.request.timeout";
     public static final String WEB_REQUEST_IP_WHITELIST = "nifi.web.request.ip.whitelist";
     public static final String WEB_SHOULD_SEND_SERVER_VERSION = "nifi.web.should.send.server.version";
+    public static final String WEB_REQUEST_LOG_FORMAT = "nifi.web.request.log.format";
 
     // ui properties
     public static final String UI_BANNER_TEXT = "nifi.ui.banner.text";
@@ -366,6 +370,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String DEFAULT_FLOW_CONFIGURATION_ARCHIVE_MAX_STORAGE = "500 MB";
     public static final String DEFAULT_SECURITY_USER_OIDC_CONNECT_TIMEOUT = "5 secs";
     public static final String DEFAULT_SECURITY_USER_OIDC_READ_TIMEOUT = "5 secs";
+    public static final String DEFAULT_SECURITY_USER_OIDC_TRUSTSTORE_STRATEGY = "JDK";
     public static final String DEFAULT_SECURITY_USER_SAML_METADATA_SIGNING_ENABLED = "false";
     public static final String DEFAULT_SECURITY_USER_SAML_REQUEST_SIGNING_ENABLED = "false";
     public static final String DEFAULT_SECURITY_USER_SAML_WANT_ASSERTIONS_SIGNED = "true";
@@ -379,6 +384,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String DEFAULT_SECURITY_USER_SAML_HTTP_CLIENT_READ_TIMEOUT = "30 secs";
     private static final String DEFAULT_SECURITY_USER_JWS_KEY_ROTATION_PERIOD = "PT1H";
     public static final String DEFAULT_WEB_SHOULD_SEND_SERVER_VERSION = "true";
+    public static final int DEFAULT_LISTENER_BOOTSTRAP_PORT = 0;
 
     // cluster common defaults
     public static final String DEFAULT_CLUSTER_PROTOCOL_HEARTBEAT_INTERVAL = "5 sec";
@@ -419,7 +425,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String DEFAULT_COMPONENT_STATUS_REPOSITORY_PERSIST_LOCATION = "./status_repository";
 
     public NiFiProperties() {
-        this(Collections.EMPTY_MAP);
+        this(Collections.emptyMap());
     }
 
     public NiFiProperties(final Map<String, String> props) {
@@ -437,6 +443,21 @@ public class NiFiProperties extends ApplicationProperties {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    public File getFlowConfigurationJsonFile() {
+        final String jsonFilename = getProperty(FLOW_CONFIGURATION_JSON_FILE);
+        if (jsonFilename != null) {
+            return new File(jsonFilename);
+        }
+
+        final File xmlFile = getFlowConfigurationFile();
+        final String xmlFilename = xmlFile.getName();
+        if (xmlFilename.contains(".xml")) {
+            return new File(xmlFile.getParentFile(), xmlFilename.replace(".xml", ".json"));
+        }
+
+        return new File(xmlFile.getParentFile(), xmlFilename.replace(".gz", "") + ".json.gz");
     }
 
     public File getFlowConfigurationFileDir() {
@@ -1100,6 +1121,10 @@ public class NiFiProperties extends ApplicationProperties {
             List<String> fallbackClaims = Arrays.asList(rawProperty.split(","));
             return fallbackClaims.stream().map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
         }
+    }
+
+    public String getOidcClientTruststoreStrategy() {
+        return getProperty(SECURITY_USER_OIDC_TRUSTSTORE_STRATEGY, DEFAULT_SECURITY_USER_OIDC_TRUSTSTORE_STRATEGY);
     }
 
     public boolean shouldSendServerVersion() {
@@ -1947,6 +1972,10 @@ public class NiFiProperties extends ApplicationProperties {
         return getProperty(BACKPRESSURE_SIZE, DEFAULT_BACKPRESSURE_SIZE);
     }
 
+    public int getDefaultListenerBootstrapPort() {
+        return getIntegerProperty(LISTENER_BOOTSTRAP_PORT, DEFAULT_LISTENER_BOOTSTRAP_PORT);
+    }
+
     /**
      * Returns the directory where the QuestDB based status repository is expected to work within.
      *
@@ -2021,7 +2050,7 @@ public class NiFiProperties extends ApplicationProperties {
      * @return NiFiProperties
      */
     public static NiFiProperties createBasicNiFiProperties(final String propertiesFilePath, final Map<String, String> additionalProperties) {
-        final Map<String, String> addProps = (additionalProperties == null) ? Collections.EMPTY_MAP : additionalProperties;
+        final Map<String, String> addProps = (additionalProperties == null) ? Collections.emptyMap() : additionalProperties;
         final Properties properties = new Properties();
         addProps.forEach(properties::put);
 

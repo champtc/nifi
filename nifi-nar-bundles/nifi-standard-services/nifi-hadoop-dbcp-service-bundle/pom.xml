@@ -17,7 +17,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-standard-services</artifactId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
     
     <artifactId>nifi-hadoop-dbcp-service-bundle</artifactId>
@@ -40,17 +40,10 @@
                 <artifactId>commons-compress</artifactId>
                 <version>1.21</version>
             </dependency>
-            <!-- Override jackson -->
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-core</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>${jackson.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

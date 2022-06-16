@@ -29,6 +29,9 @@ import org.apache.nifi.flow.VersionedProcessor;
 import org.apache.nifi.flow.VersionedPropertyDescriptor;
 import org.apache.nifi.flow.VersionedRemoteGroupPort;
 import org.apache.nifi.flow.VersionedRemoteProcessGroup;
+import org.apache.nifi.flow.VersionedReportingTask;
+import org.apache.nifi.flow.VersionedParameter;
+import org.apache.nifi.flow.VersionedParameterContext;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -41,6 +44,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class StandardFlowComparator implements FlowComparator {
+    private static final String ENCRYPTED_VALUE_PREFIX = "enc{";
+    private static final String ENCRYPTED_VALUE_SUFFIX = "}";
+
     private static final String DEFAULT_LOAD_BALANCE_STRATEGY = "DO_NOT_LOAD_BALANCE";
     private static final String DEFAULT_PARTITIONING_ATTRIBUTE = "";
     private static final String DEFAULT_LOAD_BALANCE_COMPRESSION = "DO_NOT_COMPRESS";
@@ -53,13 +59,17 @@ public class StandardFlowComparator implements FlowComparator {
     private final ComparableDataFlow flowB;
     private final Set<String> externallyAccessibleServiceIds;
     private final DifferenceDescriptor differenceDescriptor;
+    private final Function<String, String> propertyDecryptor;
+    private final Function<VersionedComponent, String> idLookup;
 
-    public StandardFlowComparator(final ComparableDataFlow flowA, final ComparableDataFlow flowB,
-        final Set<String> externallyAccessibleServiceIds, final DifferenceDescriptor differenceDescriptor) {
+    public StandardFlowComparator(final ComparableDataFlow flowA, final ComparableDataFlow flowB, final Set<String> externallyAccessibleServiceIds,
+                                  final DifferenceDescriptor differenceDescriptor, final Function<String, String> propertyDecryptor, final Function<VersionedComponent, String> idLookup) {
         this.flowA = flowA;
         this.flowB = flowB;
         this.externallyAccessibleServiceIds = externallyAccessibleServiceIds;
         this.differenceDescriptor = differenceDescriptor;
+        this.propertyDecryptor = propertyDecryptor;
+        this.idLookup = idLookup;
     }
 
     @Override
@@ -68,8 +78,14 @@ public class StandardFlowComparator implements FlowComparator {
         final VersionedProcessGroup groupB = flowB.getContents();
         final Set<FlowDifference> differences = compare(groupA, groupB);
 
+        differences.addAll(compareComponents(flowA.getControllerLevelServices(), flowB.getControllerLevelServices(), this::compare));
+        differences.addAll(compareComponents(flowA.getReportingTasks(), flowB.getReportingTasks(), this::compare));
+        differences.addAll(compareComponents(flowA.getParameterContexts(), flowB.getParameterContexts(), this::compare));
+
         return new StandardFlowComparison(flowA, flowB, differences);
     }
+
+
 
     private Set<FlowDifference> compare(final VersionedProcessGroup groupA, final VersionedProcessGroup groupB) {
         final Set<FlowDifference> differences = new HashSet<>();
@@ -79,6 +95,13 @@ public class StandardFlowComparator implements FlowComparator {
         return differences;
     }
 
+    private boolean allHaveInstanceId(Set<? extends VersionedComponent> components) {
+        if (components == null) {
+            return false;
+        }
+
+        return components.stream().allMatch(component -> component.getInstanceIdentifier() != null);
+    }
 
     private <T extends VersionedComponent> Set<FlowDifference> compareComponents(final Set<T> componentsA, final Set<T> componentsB, final ComponentComparator<T> comparator) {
         final Map<String, T> componentMapA = byId(componentsA == null ? Collections.emptySet() : componentsA);
@@ -155,7 +178,76 @@ public class StandardFlowComparator implements FlowComparator {
         addIfDifferent(differences, DifferenceType.SCHEDULED_STATE_CHANGED, processorA, processorB, VersionedProcessor::getScheduledState);
         addIfDifferent(differences, DifferenceType.STYLE_CHANGED, processorA, processorB, VersionedProcessor::getStyle);
         addIfDifferent(differences, DifferenceType.YIELD_DURATION_CHANGED, processorA, processorB, VersionedProcessor::getYieldDuration);
+        addIfDifferent(differences, DifferenceType.RETRY_COUNT_CHANGED, processorA, processorB, VersionedProcessor::getRetryCount);
+        addIfDifferent(differences, DifferenceType.RETRIED_RELATIONSHIPS_CHANGED, processorA, processorB, VersionedProcessor::getRetriedRelationships);
+        addIfDifferent(differences, DifferenceType.BACKOFF_MECHANISM_CHANGED, processorA, processorB, VersionedProcessor::getBackoffMechanism);
+        addIfDifferent(differences, DifferenceType.MAX_BACKOFF_PERIOD_CHANGED, processorA, processorB, VersionedProcessor::getMaxBackoffPeriod);
         compareProperties(processorA, processorB, processorA.getProperties(), processorB.getProperties(), processorA.getPropertyDescriptors(), processorB.getPropertyDescriptors(), differences);
+    }
+
+    private void compare(final VersionedReportingTask taskA, final VersionedReportingTask taskB, final Set<FlowDifference> differences) {
+        if (compareComponents(taskA, taskB, differences)) {
+            return;
+        }
+
+        addIfDifferent(differences, DifferenceType.ANNOTATION_DATA_CHANGED, taskA, taskB, VersionedReportingTask::getAnnotationData);
+        addIfDifferent(differences, DifferenceType.BUNDLE_CHANGED, taskA, taskB, VersionedReportingTask::getBundle);
+        addIfDifferent(differences, DifferenceType.RUN_SCHEDULE_CHANGED, taskA, taskB, VersionedReportingTask::getSchedulingPeriod);
+        addIfDifferent(differences, DifferenceType.SCHEDULING_STRATEGY_CHANGED, taskA, taskB, VersionedReportingTask::getSchedulingStrategy);
+        addIfDifferent(differences, DifferenceType.SCHEDULED_STATE_CHANGED, taskA, taskB, VersionedReportingTask::getScheduledState);
+        compareProperties(taskA, taskB, taskA.getProperties(), taskB.getProperties(), taskA.getPropertyDescriptors(), taskB.getPropertyDescriptors(), differences);
+    }
+
+    private void compare(final VersionedParameterContext contextA, final VersionedParameterContext contextB, final Set<FlowDifference> differences) {
+        if (compareComponents(contextA, contextB, differences)) {
+            return;
+        }
+
+        addIfDifferent(differences, DifferenceType.DESCRIPTION_CHANGED, contextA, contextB, VersionedParameterContext::getDescription);
+        addIfDifferent(differences, DifferenceType.INHERITED_CONTEXTS_CHANGED, contextA, contextB, VersionedParameterContext::getInheritedParameterContexts);
+
+        final Map<String, VersionedParameter> contextAParameters = parametersByName(contextA.getParameters());
+        final Map<String, VersionedParameter> contextBParameters = parametersByName(contextB.getParameters());
+
+        for (final VersionedParameter parameterA : contextA.getParameters() ) {
+            final String name = parameterA.getName();
+
+            final VersionedParameter parameterB = contextBParameters.get(parameterA.getName());
+            if (parameterB == null) {
+                differences.add(difference(DifferenceType.PARAMETER_REMOVED, contextA, contextB, name, name, null, parameterA.isSensitive() ? "<Sensitive Value>" : parameterA.getValue()));
+                continue;
+            }
+
+            if (!Objects.equals(parameterA.getValue(), parameterB.getValue())) {
+                final String valueA = parameterA.isSensitive() ? "<Sensitive Value A>" : parameterA.getValue();
+                final String valueB = parameterB.isSensitive() ? "<Sensitive Value B>" : parameterB.getValue();
+                final String description = differenceDescriptor.describeDifference(DifferenceType.PARAMETER_VALUE_CHANGED, flowA.getName(), flowB.getName(), contextA, contextB, name, valueA, valueB);
+                differences.add(new StandardFlowDifference(DifferenceType.PARAMETER_VALUE_CHANGED, contextA, contextB, name, valueA, valueB, description));
+            }
+
+            if (!Objects.equals(parameterA.getDescription(), parameterB.getDescription())) {
+                final String valueA = parameterA.getDescription();
+                final String valueB = parameterB.getDescription();
+
+                final String description = differenceDescriptor.describeDifference(DifferenceType.PARAMETER_DESCRIPTION_CHANGED,
+                    flowA.getName(), flowB.getName(), contextA, contextB, name, valueA, valueB);
+                differences.add(new StandardFlowDifference(DifferenceType.PARAMETER_DESCRIPTION_CHANGED, contextA, contextB, name, valueA, valueB, description));
+            }
+        }
+
+        // Check for any parameters that exist in Context B but not Context A.
+        for (final VersionedParameter parameter : contextB.getParameters()) {
+            final String name = parameter.getName();
+            if (contextAParameters.containsKey(name)) {
+                continue;
+            }
+
+            differences.add(difference(DifferenceType.PARAMETER_ADDED, contextA, contextB, name, name, null, parameter.isSensitive() ? "<Sensitive Value>" : parameter.getValue()));
+        }
+    }
+
+    private Map<String, VersionedParameter> parametersByName(final Collection<VersionedParameter> parameters) {
+        return parameters.stream().collect(Collectors.toMap(VersionedParameter::getName, Function.identity()));
     }
 
     @Override
@@ -173,16 +265,31 @@ public class StandardFlowComparator implements FlowComparator {
         addIfDifferent(differences, DifferenceType.ANNOTATION_DATA_CHANGED, serviceA, serviceB, VersionedControllerService::getAnnotationData);
         addIfDifferent(differences, DifferenceType.BUNDLE_CHANGED, serviceA, serviceB, VersionedControllerService::getBundle);
         compareProperties(serviceA, serviceB, serviceA.getProperties(), serviceB.getProperties(), serviceA.getPropertyDescriptors(), serviceB.getPropertyDescriptors(), differences);
+        addIfDifferent(differences, DifferenceType.SCHEDULED_STATE_CHANGED, serviceA, serviceB, VersionedControllerService::getScheduledState);
     }
 
+    private String decrypt(final String value, final VersionedPropertyDescriptor descriptor) {
+        if (value == null) {
+            return null;
+        }
+
+        final boolean sensitive = (descriptor == null || descriptor.isSensitive()) && value.startsWith(ENCRYPTED_VALUE_PREFIX) && value.endsWith(ENCRYPTED_VALUE_SUFFIX);
+        if (!sensitive) {
+            return value;
+        }
+
+        return propertyDecryptor.apply(value.substring(ENCRYPTED_VALUE_PREFIX.length(), value.length() - ENCRYPTED_VALUE_SUFFIX.length()));
+    }
 
     private void compareProperties(final VersionedComponent componentA, final VersionedComponent componentB,
         final Map<String, String> propertiesA, final Map<String, String> propertiesB,
         final Map<String, VersionedPropertyDescriptor> descriptorsA, final Map<String, VersionedPropertyDescriptor> descriptorsB,
         final Set<FlowDifference> differences) {
 
-        propertiesA.forEach((key, valueA) -> {
-            final String valueB = propertiesB.get(key);
+        propertiesA.forEach((key, rawValueA) -> {
+            final String rawValueB = propertiesB.get(key);
+            final String valueB = decrypt(rawValueB, descriptorsB.get(key));
+            final String valueA = decrypt(rawValueA, descriptorsA.get(key));
 
             VersionedPropertyDescriptor descriptor = descriptorsA.get(key);
             if (descriptor == null) {
@@ -277,6 +384,7 @@ public class StandardFlowComparator implements FlowComparator {
         addIfDifferent(differences, DifferenceType.POSITION_CHANGED, labelA, labelB, VersionedLabel::getHeight);
         addIfDifferent(differences, DifferenceType.POSITION_CHANGED, labelA, labelB, VersionedLabel::getWidth);
         addIfDifferent(differences, DifferenceType.STYLE_CHANGED, labelA, labelB, VersionedLabel::getStyle);
+        addIfDifferent(differences, DifferenceType.ZINDEX_CHANGED, labelA, labelB, VersionedLabel::getzIndex);
     }
 
     private void compare(final VersionedPort portA, final VersionedPort portB, final Set<FlowDifference> differences) {
@@ -287,6 +395,8 @@ public class StandardFlowComparator implements FlowComparator {
         if (portA != null && portA.isAllowRemoteAccess() && portB != null && portB.isAllowRemoteAccess()) {
             addIfDifferent(differences, DifferenceType.CONCURRENT_TASKS_CHANGED, portA, portB, VersionedPort::getConcurrentlySchedulableTaskCount);
         }
+
+        addIfDifferent(differences, DifferenceType.SCHEDULED_STATE_CHANGED, portA, portB, VersionedPort::getScheduledState);
     }
 
     private void compare(final VersionedRemoteProcessGroup rpgA, final VersionedRemoteProcessGroup rpgB, final Set<FlowDifference> differences) {
@@ -301,6 +411,7 @@ public class StandardFlowComparator implements FlowComparator {
         addIfDifferent(differences, DifferenceType.RPG_PROXY_USER_CHANGED, rpgA, rpgB, VersionedRemoteProcessGroup::getProxyUser);
         addIfDifferent(differences, DifferenceType.RPG_TRANSPORT_PROTOCOL_CHANGED, rpgA, rpgB, VersionedRemoteProcessGroup::getTransportProtocol);
         addIfDifferent(differences, DifferenceType.YIELD_DURATION_CHANGED, rpgA, rpgB, VersionedRemoteProcessGroup::getYieldDuration);
+        addIfDifferent(differences, DifferenceType.RPG_URL_CHANGED, rpgA, rpgB, VersionedRemoteProcessGroup::getTargetUris);
 
         differences.addAll(compareComponents(rpgA.getInputPorts(), rpgB.getInputPorts(), this::compare));
         differences.addAll(compareComponents(rpgA.getOutputPorts(), rpgB.getOutputPorts(), this::compare));
@@ -314,6 +425,7 @@ public class StandardFlowComparator implements FlowComparator {
         addIfDifferent(differences, DifferenceType.REMOTE_PORT_BATCH_SIZE_CHANGED, portA, portB, VersionedRemoteGroupPort::getBatchSize);
         addIfDifferent(differences, DifferenceType.REMOTE_PORT_COMPRESSION_CHANGED, portA, portB, VersionedRemoteGroupPort::isUseCompression);
         addIfDifferent(differences, DifferenceType.CONCURRENT_TASKS_CHANGED, portA, portB, VersionedRemoteGroupPort::getConcurrentlySchedulableTaskCount);
+        addIfDifferent(differences, DifferenceType.SCHEDULED_STATE_CHANGED, portA, portB, VersionedRemoteGroupPort::getScheduledState);
     }
 
 
@@ -332,6 +444,8 @@ public class StandardFlowComparator implements FlowComparator {
             return;
         }
 
+        compareVariableRegistries(groupA, groupB, differences);
+
         addIfDifferent(differences, DifferenceType.VERSIONED_FLOW_COORDINATES_CHANGED, groupA, groupB, VersionedProcessGroup::getVersionedFlowCoordinates);
         addIfDifferent(differences, DifferenceType.FLOWFILE_CONCURRENCY_CHANGED, groupA, groupB, VersionedProcessGroup::getFlowFileConcurrency,
             true, DEFAULT_FLOW_FILE_CONCURRENCY);
@@ -341,6 +455,7 @@ public class StandardFlowComparator implements FlowComparator {
         addIfDifferent(differences, DifferenceType.DEFAULT_BACKPRESSURE_DATA_SIZE_CHANGED, groupA, groupB, VersionedProcessGroup::getDefaultBackPressureDataSizeThreshold, true, "1 GB");
         addIfDifferent(differences, DifferenceType.DEFAULT_BACKPRESSURE_OBJECT_COUNT_CHANGED, groupA, groupB, VersionedProcessGroup::getDefaultBackPressureObjectThreshold, true, 10_000L);
         addIfDifferent(differences, DifferenceType.DEFAULT_FLOWFILE_EXPIRATION_CHANGED, groupA, groupB, VersionedProcessGroup::getDefaultFlowFileExpiration, true, "0 sec");
+        addIfDifferent(differences, DifferenceType.PARAMETER_CONTEXT_CHANGED, groupA, groupB, VersionedProcessGroup::getParameterContextName, true, null);
 
         final VersionedFlowCoordinates groupACoordinates = groupA.getVersionedFlowCoordinates();
         final VersionedFlowCoordinates groupBCoordinates = groupB.getVersionedFlowCoordinates();
@@ -359,6 +474,28 @@ public class StandardFlowComparator implements FlowComparator {
         }
     }
 
+    private void compareVariableRegistries(final VersionedProcessGroup groupA, final VersionedProcessGroup groupB, final Set<FlowDifference> differences) {
+        final Map<String, String> variablesA = groupA.getVariables();
+        final Map<String, String> variablesB = groupB.getVariables();
+
+        for (final String variableName : variablesA.keySet()) {
+            final String variableA = variablesA.get(variableName);
+            final String variableB = variablesB.get(variableName);
+
+            if (variableB == null) {
+                differences.add(difference(DifferenceType.VARIABLE_REMOVED, groupA, groupB, variableName, variableName, variableA, variableB));
+            } else if (!variableB.equals(variableA)) {
+                differences.add(difference(DifferenceType.VARIABLE_CHANGED, groupA, groupB, variableName, variableA, variableB, variableB));
+            }
+        }
+
+        for (final String variableName : variablesB.keySet()) {
+            final String variableA = variablesA.get(variableName);
+            if (variableA == null) {
+                differences.add(difference(DifferenceType.VARIABLE_ADDED, groupA, groupB, variableName, variableName, variableA, variablesB.get(variableName)));
+            }
+        }
+    }
 
     private void compare(final VersionedConnection connectionA, final VersionedConnection connectionB, final Set<FlowDifference> differences) {
         if (compareComponents(connectionA, connectionB, differences)) {
@@ -373,6 +510,7 @@ public class StandardFlowComparator implements FlowComparator {
         addIfDifferent(differences, DifferenceType.PRIORITIZERS_CHANGED, connectionA, connectionB, VersionedConnection::getPrioritizers);
         addIfDifferent(differences, DifferenceType.SELECTED_RELATIONSHIPS_CHANGED, connectionA, connectionB, VersionedConnection::getSelectedRelationships);
         addIfDifferent(differences, DifferenceType.SOURCE_CHANGED, connectionA, connectionB, c -> c.getSource().getId());
+        addIfDifferent(differences, DifferenceType.ZINDEX_CHANGED, connectionA, connectionB, VersionedConnection::getzIndex);
 
         addIfDifferent(differences, DifferenceType.LOAD_BALANCE_STRATEGY_CHANGED, connectionA, connectionB,
                 conn -> conn.getLoadBalanceStrategy() == null ? DEFAULT_LOAD_BALANCE_STRATEGY : conn.getLoadBalanceStrategy());
@@ -386,7 +524,7 @@ public class StandardFlowComparator implements FlowComparator {
 
 
     private <T extends VersionedComponent> Map<String, T> byId(final Set<T> components) {
-        return components.stream().collect(Collectors.toMap(VersionedComponent::getIdentifier, Function.identity()));
+        return components.stream().collect(Collectors.toMap(idLookup::apply, Function.identity()));
     }
 
     private <T extends VersionedComponent> void addIfDifferent(final Set<FlowDifference> differences, final DifferenceType type, final T componentA, final T componentB,

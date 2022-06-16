@@ -20,7 +20,7 @@ limitations under the License.
     <parent>
         <artifactId>minifi</artifactId>
         <groupId>org.apache.nifi.minifi</groupId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
     <artifactId>minifi-assembly</artifactId>
     <packaging>pom</packaging>
@@ -125,13 +125,13 @@ limitations under the License.
         <dependency>
             <groupId>org.apache.nifi.minifi</groupId>
             <artifactId>minifi-framework-nar</artifactId>
-            <version>1.15.4-SNAPSHOT</version>
+            <version>1.16.4-SNAPSHOT</version>
             <type>nar</type>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi.minifi</groupId>
             <artifactId>minifi-server-nar</artifactId>
-            <version>1.15.4-SNAPSHOT</version>
+            <version>1.16.4-SNAPSHOT</version>
             <type>nar</type>
         </dependency>
         <dependency>
@@ -205,6 +205,10 @@ limitations under the License.
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-properties</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
         </dependency>
     </dependencies>
 
@@ -385,4 +389,8 @@ limitations under the License.
         </profile>
     </profiles>
 
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

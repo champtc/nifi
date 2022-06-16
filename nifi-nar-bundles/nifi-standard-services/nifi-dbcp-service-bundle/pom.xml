@@ -17,13 +17,18 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-standard-services</artifactId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
     
     <artifactId>nifi-dbcp-service-bundle</artifactId>
     <packaging>pom</packaging>
     <modules>
         <module>nifi-dbcp-service</module>
+        <module>nifi-hikari-dbcp-service</module>
         <module>nifi-dbcp-service-nar</module>
     </modules>
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

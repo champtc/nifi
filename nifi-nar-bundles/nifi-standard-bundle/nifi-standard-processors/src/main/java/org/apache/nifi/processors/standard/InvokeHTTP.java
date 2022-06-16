@@ -23,6 +23,8 @@ import com.burgstaller.okhttp.digest.DigestAuthenticator;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.Proxy;
 import java.net.Proxy.Type;
 import java.net.URL;
@@ -42,6 +44,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,6 +62,7 @@ import okhttp3.ConnectionPool;
 import okhttp3.Credentials;
 import okhttp3.Handshake;
 import okhttp3.Headers;
+import okhttp3.JavaNetCookieJar;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.MultipartBody.Builder;
@@ -81,6 +85,7 @@ import org.apache.nifi.annotation.behavior.WritesAttributes;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
+import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
@@ -89,6 +94,7 @@ import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
 import org.apache.nifi.logging.ComponentLog;
+import org.apache.nifi.oauth2.OAuth2AccessTokenProvider;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.DataUnit;
 import org.apache.nifi.processor.ProcessContext;
@@ -96,6 +102,8 @@ import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
+import org.apache.nifi.processors.standard.http.FlowFileNamingStrategy;
+import org.apache.nifi.processors.standard.http.CookieStrategy;
 import org.apache.nifi.processors.standard.util.ProxyAuthenticator;
 import org.apache.nifi.processors.standard.util.SoftLimitBoundedByteArrayOutputStream;
 import org.apache.nifi.proxy.ProxyConfiguration;
@@ -166,6 +174,14 @@ public class InvokeHTTP extends AbstractProcessor {
     public static final String HTTP = "http";
     public static final String HTTPS = "https";
 
+    public static final String GET_METHOD = "GET";
+    public static final String POST_METHOD = "POST";
+    public static final String PUT_METHOD = "PUT";
+    public static final String PATCH_METHOD = "PATCH";
+    public static final String DELETE_METHOD = "DELETE";
+    public static final String HEAD_METHOD = "HEAD";
+    public static final String OPTIONS_METHOD = "OPTIONS";
+
     private static final Pattern DYNAMIC_FORM_PARAMETER_NAME = Pattern.compile("post:form:(?<formDataName>.*)$");
     private static final String FORM_DATA_NAME_GROUP = "formDataName";
 
@@ -175,7 +191,7 @@ public class InvokeHTTP extends AbstractProcessor {
             .description("HTTP request method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS). Arbitrary methods are also supported. "
                     + "Methods other than POST, PUT and PATCH will be sent without a message body.")
             .required(true)
-            .defaultValue("GET")
+            .defaultValue(GET_METHOD)
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .addValidator(StandardValidators.createAttributeExpressionLanguageValidator(AttributeExpression.ResultType.STRING))
             .build();
@@ -484,6 +500,35 @@ public class InvokeHTTP extends AbstractProcessor {
             .allowableValues("True", "False")
             .build();
 
+    public static final PropertyDescriptor OAUTH2_ACCESS_TOKEN_PROVIDER = new PropertyDescriptor.Builder()
+            .name("oauth2-access-token-provider")
+            .displayName("OAuth2 Access Token provider")
+            .identifiesControllerService(OAuth2AccessTokenProvider.class)
+            .required(false)
+            .build();
+
+    public static final PropertyDescriptor FLOW_FILE_NAMING_STRATEGY = new PropertyDescriptor.Builder()
+            .name("flow-file-naming-strategy")
+            .description("Determines the strategy used for setting the filename attribute of the FlowFile.")
+            .displayName("FlowFile Naming Strategy")
+            .required(true)
+            .defaultValue(FlowFileNamingStrategy.RANDOM.name())
+            .allowableValues(
+                    Arrays.stream(FlowFileNamingStrategy.values()).map(strategy ->
+                            new AllowableValue(strategy.name(), strategy.name(), strategy.getDescription())
+                    ).toArray(AllowableValue[]::new)
+            )
+            .build();
+
+    public static final PropertyDescriptor PROP_COOKIE_STRATEGY = new PropertyDescriptor.Builder()
+            .name("cookie-strategy")
+            .description("Strategy for accepting and persisting HTTP cookies. Accepting cookies enables persistence across multiple requests.")
+            .displayName("Cookie Strategy")
+            .required(true)
+            .defaultValue(CookieStrategy.DISABLED.name())
+            .allowableValues(CookieStrategy.values())
+            .build();
+
     private static final ProxySpec[] PROXY_SPECS = {ProxySpec.HTTP_AUTH, ProxySpec.SOCKS};
     public static final PropertyDescriptor PROXY_CONFIGURATION_SERVICE
             = ProxyConfiguration.createProxyConfigPropertyDescriptor(true, PROXY_SPECS);
@@ -498,11 +543,14 @@ public class InvokeHTTP extends AbstractProcessor {
             PROP_MAX_IDLE_CONNECTIONS,
             PROP_DATE_HEADER,
             PROP_FOLLOW_REDIRECTS,
+            PROP_COOKIE_STRATEGY,
             DISABLE_HTTP2_PROTOCOL,
+            FLOW_FILE_NAMING_STRATEGY,
             PROP_ATTRIBUTES_TO_SEND,
             PROP_USERAGENT,
             PROP_BASIC_AUTH_USERNAME,
             PROP_BASIC_AUTH_PASSWORD,
+            OAUTH2_ACCESS_TOKEN_PROVIDER,
             PROXY_CONFIGURATION_SERVICE,
             PROP_PROXY_HOST,
             PROP_PROXY_PORT,
@@ -570,6 +618,8 @@ public class InvokeHTTP extends AbstractProcessor {
     private volatile Pattern regexAttributesToSend = null;
 
     private volatile boolean useChunked = false;
+
+    private volatile Optional<OAuth2AccessTokenProvider> oauth2AccessTokenProviderOptional;
 
     private final AtomicReference<OkHttpClient> okHttpClientAtomicReference = new AtomicReference<>();
 
@@ -704,6 +754,19 @@ public class InvokeHTTP extends AbstractProcessor {
                     .build());
         }
 
+        boolean usingUserNamePasswordAuthorization = validationContext.getProperty(PROP_BASIC_AUTH_USERNAME).isSet()
+            || validationContext.getProperty(PROP_BASIC_AUTH_PASSWORD).isSet();
+
+        boolean usingOAuth2Authorization = validationContext.getProperty(OAUTH2_ACCESS_TOKEN_PROVIDER).isSet();
+
+        if (usingUserNamePasswordAuthorization && usingOAuth2Authorization) {
+            results.add(new ValidationResult.Builder()
+                .subject("Authorization properties")
+                .valid(false)
+                .explanation("OAuth2 Authorization cannot be configured together with Username and Password properties")
+                .build());
+        }
+
         return results;
     }
 
@@ -775,11 +838,35 @@ public class InvokeHTTP extends AbstractProcessor {
             okHttpClientBuilder.sslSocketFactory(socketFactory, trustManager);
         }
 
+        // Configure cookie strategy
+        switch(CookieStrategy.valueOf(context.getProperty(PROP_COOKIE_STRATEGY).getValue())) {
+            case DISABLED:
+                break;
+            case ACCEPT_ALL:
+                final CookieManager cookieManager = new CookieManager();
+                cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
+                okHttpClientBuilder.cookieJar(new JavaNetCookieJar(cookieManager));
+                break;
+        }
+
         setAuthenticator(okHttpClientBuilder, context);
 
         useChunked = context.getProperty(PROP_USE_CHUNKED_ENCODING).asBoolean();
 
         okHttpClientAtomicReference.set(okHttpClientBuilder.build());
+    }
+
+    @OnScheduled
+    public void initOauth2AccessTokenProvider(final ProcessContext context) {
+        if (context.getProperty(OAUTH2_ACCESS_TOKEN_PROVIDER).isSet()) {
+            OAuth2AccessTokenProvider oauth2AccessTokenProvider = context.getProperty(OAUTH2_ACCESS_TOKEN_PROVIDER).asControllerService(OAuth2AccessTokenProvider.class);
+
+            oauth2AccessTokenProvider.getAccessDetails();
+
+            oauth2AccessTokenProviderOptional = Optional.of(oauth2AccessTokenProvider);
+        } else {
+            oauth2AccessTokenProviderOptional = Optional.empty();
+        }
     }
 
     private void setAuthenticator(OkHttpClient.Builder okHttpClientBuilder, ProcessContext context) {
@@ -817,7 +904,7 @@ public class InvokeHTTP extends AbstractProcessor {
             }
 
             String request = context.getProperty(PROP_METHOD).evaluateAttributeExpressions().getValue().toUpperCase();
-            if ("POST".equals(request) || "PUT".equals(request) || "PATCH".equals(request)) {
+            if (POST_METHOD.equals(request) || PUT_METHOD.equals(request) || PATCH_METHOD.equals(request)) {
                 return;
             } else if (putToAttribute) {
                 requestFlowFile = session.create();
@@ -912,6 +999,14 @@ public class InvokeHTTP extends AbstractProcessor {
                         // this will overwrite any existing flowfile attributes
                         responseFlowFile = session.putAllAttributes(responseFlowFile, convertAttributesFromHeaders(responseHttp));
 
+                        // update FlowFile's filename attribute with an extracted value from the remote URL
+                        if (FlowFileNamingStrategy.URL_PATH.equals(getFlowFileNamingStrategy(context)) && GET_METHOD.equals(httpRequest.method())) {
+                            String fileName = getFileNameFromUrl(url);
+                            if (fileName != null) {
+                                responseFlowFile = session.putAttribute(responseFlowFile, CoreAttributes.FILENAME.key(), fileName);
+                            }
+                        }
+
                         // transfer the message body to the payload
                         // can potentially be null in edge cases
                         if (bodyExists) {
@@ -995,7 +1090,6 @@ public class InvokeHTTP extends AbstractProcessor {
         }
     }
 
-
     private Request configureRequest(final ProcessContext context, final ProcessSession session, final FlowFile requestFlowFile, URL url) {
         final Request.Builder requestBuilder = new Request.Builder();
 
@@ -1003,35 +1097,41 @@ public class InvokeHTTP extends AbstractProcessor {
         final String authUser = trimToEmpty(context.getProperty(PROP_BASIC_AUTH_USERNAME).getValue());
 
         // If the username/password properties are set then check if digest auth is being used
-        if (!authUser.isEmpty() && "false".equalsIgnoreCase(context.getProperty(PROP_DIGEST_AUTH).getValue())) {
-            final String authPass = trimToEmpty(context.getProperty(PROP_BASIC_AUTH_PASSWORD).getValue());
+        if ("false".equalsIgnoreCase(context.getProperty(PROP_DIGEST_AUTH).getValue())) {
+            if (!authUser.isEmpty()) {
+                final String authPass = trimToEmpty(context.getProperty(PROP_BASIC_AUTH_PASSWORD).getValue());
 
-            String credential = Credentials.basic(authUser, authPass);
-            requestBuilder.header("Authorization", credential);
+                String credential = Credentials.basic(authUser, authPass);
+                requestBuilder.header("Authorization", credential);
+            } else {
+                oauth2AccessTokenProviderOptional.ifPresent(oauth2AccessTokenProvider ->
+                    requestBuilder.addHeader("Authorization", "Bearer " + oauth2AccessTokenProvider.getAccessDetails().getAccessToken())
+                );
+            }
         }
 
         // set the request method
         String method = trimToEmpty(context.getProperty(PROP_METHOD).evaluateAttributeExpressions(requestFlowFile).getValue()).toUpperCase();
         switch (method) {
-            case "GET":
+            case GET_METHOD:
                 requestBuilder.get();
                 break;
-            case "POST":
+            case POST_METHOD:
                 RequestBody requestBody = getRequestBodyToSend(session, context, requestFlowFile);
                 requestBuilder.post(requestBody);
                 break;
-            case "PUT":
+            case PUT_METHOD:
                 requestBody = getRequestBodyToSend(session, context, requestFlowFile);
                 requestBuilder.put(requestBody);
                 break;
-            case "PATCH":
+            case PATCH_METHOD:
                 requestBody = getRequestBodyToSend(session, context, requestFlowFile);
                 requestBuilder.patch(requestBody);
                 break;
-            case "HEAD":
+            case HEAD_METHOD:
                 requestBuilder.head();
                 break;
-            case "DELETE":
+            case DELETE_METHOD:
                 requestBuilder.delete();
                 break;
             default:
@@ -1150,7 +1250,6 @@ public class InvokeHTTP extends AbstractProcessor {
             }
         }
     }
-
 
     private void route(FlowFile request, FlowFile response, ProcessSession session, ProcessContext context, int statusCode) {
         // check if we should yield the processor
@@ -1271,5 +1370,21 @@ public class InvokeHTTP extends AbstractProcessor {
      */
     private static File getETagCacheDir() throws IOException {
         return Files.createTempDirectory(InvokeHTTP.class.getSimpleName()).toFile();
+    }
+
+    private FlowFileNamingStrategy getFlowFileNamingStrategy(final ProcessContext context) {
+        final String strategy = context.getProperty(FLOW_FILE_NAMING_STRATEGY).getValue();
+        return FlowFileNamingStrategy.valueOf(strategy);
+    }
+
+    private String getFileNameFromUrl(URL url) {
+        String fileName = null;
+        String path = StringUtils.removeEnd(url.getPath(), "/");
+
+        if (!StringUtils.isEmpty(path)) {
+            fileName = path.substring(path.lastIndexOf('/') + 1);
+        }
+
+        return fileName;
     }
 }

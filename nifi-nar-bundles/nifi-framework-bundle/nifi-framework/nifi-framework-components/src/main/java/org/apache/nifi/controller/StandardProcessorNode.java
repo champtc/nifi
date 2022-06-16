@@ -157,6 +157,11 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
     private final int hashCode;
     private volatile boolean hasActiveThreads = false;
 
+    private volatile int retryCount;
+    private volatile Set<String> retriedRelationships;
+    private volatile BackoffMechanism backoffMechanism;
+    private volatile String maxBackoffPeriod;
+
     public StandardProcessorNode(final LoggableComponent<Processor> processor, final String uuid,
                                  final ValidationContextFactory validationContextFactory, final ProcessScheduler scheduler,
                                  final ControllerServiceProvider controllerServiceProvider, final ComponentVariableRegistry variableRegistry,
@@ -201,6 +206,11 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
         schedulingStrategy = SchedulingStrategy.TIMER_DRIVEN;
         executionNode = isExecutionNodeRestricted() ? ExecutionNode.PRIMARY : ExecutionNode.ALL;
         this.hashCode = new HashCodeBuilder(7, 67).append(identifier).toHashCode();
+
+        retryCount = DEFAULT_RETRY_COUNT;
+        retriedRelationships = new HashSet<>();
+        backoffMechanism = DEFAULT_BACKOFF_MECHANISM;
+        maxBackoffPeriod = DEFAULT_MAX_BACKOFF_PERIOD;
 
         try {
             if (processorDetails.getProcClass().isAnnotationPresent(DefaultSchedule.class)) {
@@ -946,10 +956,7 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
 
     @Override
     public synchronized void reload(final Set<URL> additionalUrls) throws ProcessorInstantiationException {
-        if (isRunning()) {
-            throw new IllegalStateException("Cannot reload Processor while the Processor is running");
-        }
-        String additionalResourcesFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls);
+        final String additionalResourcesFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls, determineClasloaderIsolationKey());
         setAdditionalResourcesFingerprint(additionalResourcesFingerprint);
         getReloadComponent().reload(this, getCanonicalClassName(), getBundleCoordinate(), additionalUrls);
     }
@@ -1097,8 +1104,11 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
                     final Bundle bundle = extensionManager.getBundle(getBundleCoordinate());
                     final Set<URL> classpathUrls = getAdditionalClasspathResources(context.getProperties().keySet(), descriptor -> context.getProperty(descriptor).getValue());
 
+                    final String classloaderIsolationKey = getClassLoaderIsolationKey(context);
+
                     final ClassLoader currentClassLoader = Thread.currentThread().getContextClassLoader();
-                    try (final InstanceClassLoader detectedClassLoader = extensionManager.createInstanceClassLoader(getComponentType(), getIdentifier(), bundle, classpathUrls, false)) {
+                    try (final InstanceClassLoader detectedClassLoader = extensionManager.createInstanceClassLoader(getComponentType(), getIdentifier(), bundle, classpathUrls, false,
+                                classloaderIsolationKey)) {
                         Thread.currentThread().setContextClassLoader(detectedClassLoader);
                         results.addAll(verifiable.verify(context, logger, attributes));
                     } finally {
@@ -1509,24 +1519,23 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
         if (starting) { // will ensure that the Processor represented by this node can only be started once
             initiateStart(taskScheduler, administrativeYieldMillis, timeoutMillis, processContextFactory, schedulingAgentCallback);
         } else {
-            final String procName = processorRef.get().toString();
-            LOG.warn("Cannot start {} because it is not currently stopped. Current state is {}", procName, currentState);
-            procLog.warn("Cannot start {} because it is not currently stopped. Current state is {}", new Object[]{procName, currentState});
+            final String procName = processorRef.get().getProcessor().toString();
+            procLog.warn("Cannot start {} because it is not currently stopped. Current state is {}", procName, currentState);
         }
     }
 
-    private synchronized void activateThread() {
+    private void activateThread() {
         final Thread thread = Thread.currentThread();
         final Long timestamp = System.currentTimeMillis();
         activeThreads.put(thread, new ActiveTask(timestamp));
     }
 
-    private synchronized void deactivateThread() {
+    private void deactivateThread() {
         activeThreads.remove(Thread.currentThread());
     }
 
     @Override
-    public synchronized List<ActiveThreadInfo> getActiveThreads(final ThreadDetails threadDetails) {
+    public List<ActiveThreadInfo> getActiveThreads(final ThreadDetails threadDetails) {
         final long now = System.currentTimeMillis();
 
         final Map<Long, ThreadInfo> threadInfoMap = Stream.of(threadDetails.getThreadInfos())
@@ -1550,7 +1559,7 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
     }
 
     @Override
-    public synchronized int getTerminatedThreadCount() {
+    public int getTerminatedThreadCount() {
         int count = 0;
         for (final ActiveTask task : activeThreads.values()) {
             if (task.isTerminated()) {
@@ -1617,8 +1626,6 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
 
         // Create a task to invoke the @OnScheduled annotation of the processor
         final Callable<Void> startupTask = () -> {
-            final ProcessContext processContext = processContextFactory.get();
-
             final ScheduledState currentScheduleState = scheduledState.get();
             if (currentScheduleState == ScheduledState.STOPPING || currentScheduleState == ScheduledState.STOPPED || getDesiredState() == ScheduledState.STOPPED) {
                 LOG.debug("{} is stopped. Will not call @OnScheduled lifecycle methods or begin trigger onTrigger() method", StandardProcessorNode.this);
@@ -1643,6 +1650,8 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
 
             // Now that the task has been scheduled, set the timeout
             completionTimestampRef.set(System.currentTimeMillis() + timeoutMilis);
+
+            final ProcessContext processContext = processContextFactory.get();
 
             try (final NarCloseable nc = NarCloseable.withComponentNarLoader(getExtensionManager(), processor.getClass(), processor.getIdentifier())) {
                 try {
@@ -1809,7 +1818,7 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
                                 deactivateThread();
                             }
 
-                            scheduleState.decrementActiveThreadCount(null);
+                            scheduleState.decrementActiveThreadCount();
                             hasActiveThreads = false;
                             scheduledState.set(ScheduledState.STOPPED);
                             future.complete(null);
@@ -1864,6 +1873,73 @@ public class StandardProcessorNode extends ProcessorNode implements Connectable 
         return desiredState;
     }
 
+    @Override
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    @Override
+    public void setRetryCount(Integer retryCount) {
+        if (isRunning()) {
+            throw new IllegalStateException("Cannot modify Processor configuration while the Processor is running");
+        }
+        this.retryCount = (retryCount == null) ? 0 : retryCount;
+    }
+
+    @Override
+    public Set<String> getRetriedRelationships() {
+        return retriedRelationships;
+    }
+
+    @Override
+    public void setRetriedRelationships(Set<String> retriedRelationships) {
+        if (isRunning()) {
+            throw new IllegalStateException("Cannot modify Processor configuration while the Processor is running");
+        }
+        this.retriedRelationships = (retriedRelationships == null) ? Collections.emptySet() : new HashSet<>(retriedRelationships);
+    }
+
+    @Override
+    public boolean isRelationshipRetried(final Relationship relationship) {
+        if (relationship == null) {
+            return false;
+        } else {
+            return this.retriedRelationships.contains(relationship.getName());
+        }
+    }
+
+    @Override
+    public BackoffMechanism getBackoffMechanism() {
+        return backoffMechanism;
+    }
+
+    @Override
+    public void setBackoffMechanism(BackoffMechanism backoffMechanism) {
+        if (isRunning()) {
+            throw new IllegalStateException("Cannot modify Processor configuration while the Processor is running");
+        }
+        this.backoffMechanism = (backoffMechanism == null) ? BackoffMechanism.PENALIZE_FLOWFILE : backoffMechanism;
+    }
+
+    @Override
+    public String getMaxBackoffPeriod() {
+        return maxBackoffPeriod;
+    }
+
+    @Override
+    public void setMaxBackoffPeriod(String maxBackoffPeriod) {
+        if (isRunning()) {
+            throw new IllegalStateException("Cannot modify Processor configuration while the Processor is running");
+        }
+        if (maxBackoffPeriod == null) {
+            maxBackoffPeriod = DEFAULT_MAX_BACKOFF_PERIOD;
+        }
+        final long backoffNanos = FormatUtils.getTimeDuration(maxBackoffPeriod, TimeUnit.NANOSECONDS);
+        if (backoffNanos < 0) {
+            throw new IllegalArgumentException("Max Backoff Period must be positive");
+        }
+        this.maxBackoffPeriod = maxBackoffPeriod;
+    }
     private void monitorAsyncTask(final Future<?> taskFuture, final Future<?> monitoringFuture, final long completionTimestamp) {
         if (taskFuture.isDone()) {
             monitoringFuture.cancel(false); // stop scheduling this task

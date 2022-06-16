@@ -156,6 +156,47 @@ public final class AzureStorageUtils {
             .required(false)
             .build();
 
+    public static final PropertyDescriptor MANAGED_IDENTITY_CLIENT_ID = new PropertyDescriptor.Builder()
+            .name("managed-identity-client-id")
+            .displayName("Managed Identity Client ID")
+            .description("Client ID of the managed identity. The property is required when User Assigned Managed Identity is used for authentication. " +
+                    "It must be empty in case of System Assigned Managed Identity.")
+            .sensitive(true)
+            .required(false)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .build();
+
+    public static final PropertyDescriptor SERVICE_PRINCIPAL_TENANT_ID = new PropertyDescriptor.Builder()
+            .name("service-principal-tenant-id")
+            .displayName("Service Principal Tenant ID")
+            .description("Tenant ID of the Azure Active Directory hosting the Service Principal. The property is required when Service Principal authentication is used.")
+            .sensitive(true)
+            .required(false)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .build();
+
+    public static final PropertyDescriptor SERVICE_PRINCIPAL_CLIENT_ID = new PropertyDescriptor.Builder()
+            .name("service-principal-client-id")
+            .displayName("Service Principal Client ID")
+            .description("Client ID (or Application ID) of the Client/Application having the Service Principal. The property is required when Service Principal authentication is used.")
+            .sensitive(true)
+            .required(false)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .build();
+
+    public static final PropertyDescriptor SERVICE_PRINCIPAL_CLIENT_SECRET = new PropertyDescriptor.Builder()
+            .name("service-principal-client-secret")
+            .displayName("Service Principal Client Secret")
+            .description("Password of the Client/Application. The property is required when Service Principal authentication is used.")
+            .sensitive(true)
+            .required(false)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .build();
+
     private AzureStorageUtils() {
         // do not instantiate
     }

@@ -70,11 +70,23 @@ When NiFi first starts up, the following files and directories are created:
 * `provenance_repository`
 * `work` directory
 * `logs` directory
-* Within the `conf` directory, the _flow.xml.gz_ file is created
+* Within the `conf` directory, the _flow.json.gz_ file is created
 
 NOTE: For security purposes, when no security configuration is provided NiFi will now bind to 127.0.0.1 by default and the UI will only be accessible through this loopback interface. HTTPS properties should be configured to access NiFi from other interfaces. See the <<security_configuration,Security Configuration>> for guidance on how to do this.
 
 See the <<system_properties>> section of this guide for more information about configuring NiFi repositories and configuration files.
+
+== Build a Custom Distribution
+
+The binary build of Apache NiFi that is provided by the Apache mirrors does not contain every NAR file that is part of the official release. This is due to size constraints imposed by the mirrors to reduce the expenses associated with hosting such a large project. The Developer Guide link:developer-guide.html#build[has a list] of optional Maven profiles that can be activated to build a binary distribution of NiFi with these extra capabilities.
+
+To execute build, download either Java 8 or Java 11 from https://www.adoptium.net[Adoptium] or whichever distribution of the JDK your team uses (Adoptium is the rebranding of AdoptOpenJDK which is one of the most popular). Java 8 and 11 are the only officially supported JVM releases. Then install https://maven.apache.org[Apache Maven].
+
+The next step is to download a copy of the Apache NiFi source code from the https://nifi.apache.org/download.html[NiFi Downloads page]. The reason you need the source build is that it includes a module called `nifi-assembly` which is the Maven module that builds a binary distribution. Expand the archive and run a Maven clean build. The following example shows how to build a distribution that activates the `graph` and `media` bundle profiles to add in support for graph databases and Apache Tika content and metadata extraction.
+
+`cd <nifi_source_folder>/nifi-assembly`
+
+`mvn clean install -Pinclude-grpc,include-graph,include-media`
 
 == Port Configuration
 
@@ -89,6 +101,7 @@ The following table lists the default ports used by NiFi and the corresponding p
 |Cluster Node Protocol Port*      | `nifi.cluster.node.protocol.port`     | `11443`
 |Cluster Node Load Balancing Port | `nifi.cluster.node.load.balance.port` | `6342`
 |Web HTTP Forwarding Port         | `nifi.web.http.port.forwarding`       | _none_
+|Listener Bootstrap Port          | `nifi.listener.bootstrap.port`        | _random ephemeral_
 |==================================================================================================================================================
 
 NOTE: The ports marked with an asterisk (*) have property values that are blank by default in _nifi.properties_.  The values shown in the table are the default values for these ports when <<toolkit-guide.adoc#tls_toolkit,TLS Toolkit>> is used to generate _nifi.properties_ for a secured NiFi instance.  The default Certificate Authority Port used by <<toolkit-guide.adoc#tls_toolkit,TLS Toolkit>> is `9443`.
@@ -436,8 +449,8 @@ To enable authentication via OpenId Connect the following properties must be con
 |==================================================================================================================================================
 | Property Name | Description
 |`nifi.security.user.oidc.discovery.url` | The discovery URL for the desired OpenId Connect Provider (link:http://openid.net/specs/openid-connect-discovery-1_0.html[http://openid.net/specs/openid-connect-discovery-1_0.html^]).
-|`nifi.security.user.oidc.connect.timeout` | Connect timeout when communicating with the OpenId Connect Provider.
-|`nifi.security.user.oidc.read.timeout` | Read timeout when communicating with the OpenId Connect Provider.
+|`nifi.security.user.oidc.connect.timeout` | Connect timeout when communicating with the OpenId Connect Provider. The default value is `5 secs`.
+|`nifi.security.user.oidc.read.timeout` | Read timeout when communicating with the OpenId Connect Provider. The default value is `5 secs`.
 |`nifi.security.user.oidc.client.id` | The client id for NiFi after registration with the OpenId Connect Provider.
 |`nifi.security.user.oidc.client.secret` | The client secret for NiFi after registration with the OpenId Connect Provider.
 |`nifi.security.user.oidc.preferred.jwsalgorithm` | The preferred algorithm for validating identity tokens. If this value is blank, it will default to `RS256` which is required to be supported
@@ -447,6 +460,7 @@ JSON Web Key (JWK) provided through the jwks_uri in the metadata found at the di
 |`nifi.security.user.oidc.additional.scopes` | Comma separated scopes that are sent to OpenId Connect Provider in addition to `openid` and `email`.
 |`nifi.security.user.oidc.claim.identifying.user` | Claim that identifies the user to be logged in; default is `email`. May need to be requested via the `nifi.security.user.oidc.additional.scopes` before usage.
 |`nifi.security.user.oidc.fallback.claims.identifying.user` | Comma separated possible fallback claims used to identify the user in case `nifi.security.user.oidc.claim.identifying.user` claim is not present for the login user.
+|`nifi.security.user.oidc.truststore.strategy` | If value is `NIFI`, use the NiFi truststore when connecting to the OIDC service, otherwise if value is `JDK` use Java's default `cacerts` truststore. The default value is `JDK`.
 |==================================================================================================================================================
 
 [[saml]]
@@ -461,17 +475,17 @@ To enable authentication via SAML the following properties must be configured in
 |`nifi.security.user.saml.sp.entity.id`| The entity id of the service provider (i.e. NiFi). This value will be used as the `Issuer` for SAML authentication requests and should be a valid URI. In some cases the service provider entity id must be registered ahead of time with the identity provider.
 |`nifi.security.user.saml.identity.attribute.name`| The name of a SAML assertion attribute containing the user'sidentity. This property is optional and if not specified, or if the attribute is not found, then the NameID of the Subject will be used.
 |`nifi.security.user.saml.group.attribute.name`| The name of a SAML assertion attribute containing group names the user belongs to. This property is optional, but if populated the groups will be passed along to the authorization process.
-|`nifi.security.user.saml.metadata.signing.enabled`| Enables signing of the generated service provider metadata.
-|`nifi.security.user.saml.request.signing.enabled`| Controls the value of `AuthnRequestsSigned` in the generated service provider metadata from `nifi-api/access/saml/metadata`. This indicates that the service provider (i.e. NiFi) should not sign authentication requests sent to the identity provider, but the requests may still need to be signed if the identity provider indicates `WantAuthnRequestSigned=true`.
-|`nifi.security.user.saml.want.assertions.signed`| Controls the value of `WantAssertionsSigned` in the generated service provider metadata from `nifi-api/access/saml/metadata`. This indicates that the identity provider should sign assertions, but some identity providers may provide their own configuration for controlling whether assertions are signed.
-|`nifi.security.user.saml.signature.algorithm`| The algorithm to use when signing SAML messages. Reference the link:https://git.shibboleth.net/view/?p=java-xmltooling.git;a=blob;f=src/main/java/org/opensaml/xml/signature/SignatureConstants.java[Open SAML Signature Constants] for a list of valid values. If not specified, a default of SHA-256 will be used.
-|`nifi.security.user.saml.signature.digest.algorithm`| The digest algorithm to use when signing SAML messages. Reference the link:https://git.shibboleth.net/view/?p=java-xmltooling.git;a=blob;f=src/main/java/org/opensaml/xml/signature/SignatureConstants.java[Open SAML Signature Constants] for a list of valid values. If not specified, a default of SHA-256 will be used.
-|`nifi.security.user.saml.message.logging.enabled`| Enables logging of SAML messages for debugging purposes.
-|`nifi.security.user.saml.authentication.expiration`| The expiration of the NiFi JWT that will be produced from a successful SAML authentication response.
-|`nifi.security.user.saml.single.logout.enabled`| Enables SAML SingleLogout which causes a logout from NiFi to logout of the identity provider. By default, a logout of NiFi will only remove the NiFi JWT.
+|`nifi.security.user.saml.metadata.signing.enabled`| Enables signing of the generated service provider metadata. The default value is `false`.
+|`nifi.security.user.saml.request.signing.enabled`| Controls the value of `AuthnRequestsSigned` in the generated service provider metadata from `nifi-api/access/saml/metadata`. This indicates that the service provider (i.e. NiFi) should not sign authentication requests sent to the identity provider, but the requests may still need to be signed if the identity provider indicates `WantAuthnRequestSigned=true`. The default value is `false`.
+|`nifi.security.user.saml.want.assertions.signed`| Controls the value of `WantAssertionsSigned` in the generated service provider metadata from `nifi-api/access/saml/metadata`. This indicates that the identity provider should sign assertions, but some identity providers may provide their own configuration for controlling whether assertions are signed. The default value is `true`.
+|`nifi.security.user.saml.signature.algorithm`| The algorithm to use when signing SAML messages. Reference the link:https://git.shibboleth.net/view/?p=java-xmltooling.git;a=blob;f=src/main/java/org/opensaml/xml/signature/SignatureConstants.java[Open SAML Signature Constants] for a list of valid values. If not specified, a default of SHA-256 will be used. The default value is `http://www.w3.org/2001/04/xmldsig-more#rsa-sha256`.
+|`nifi.security.user.saml.signature.digest.algorithm`| The digest algorithm to use when signing SAML messages. Reference the link:https://git.shibboleth.net/view/?p=java-xmltooling.git;a=blob;f=src/main/java/org/opensaml/xml/signature/SignatureConstants.java[Open SAML Signature Constants] for a list of valid values. If not specified, a default of SHA-256 will be used. The default value is `http://www.w3.org/2001/04/xmlenc#sha256`.
+|`nifi.security.user.saml.message.logging.enabled`| Enables logging of SAML messages for debugging purposes. The default value is `false`.
+|`nifi.security.user.saml.authentication.expiration`| The expiration of the NiFi JWT that will be produced from a successful SAML authentication response. The default value is `12 hours`.
+|`nifi.security.user.saml.single.logout.enabled`| Enables SAML SingleLogout which causes a logout from NiFi to logout of the identity provider. By default, a logout of NiFi will only remove the NiFi JWT. The default value is `false`.
 |`nifi.security.user.saml.http.client.truststore.strategy`| The truststore strategy when the IDP metadata URL begins with https. A value of `JDK` indicates to use the JDK's default truststore. A value of`NIFI`indicates to use the truststore specified by `nifi.security.truststore`.
-|`nifi.security.user.saml.http.client.connect.timeout`| The connection timeout when communicating with the SAML IDP.
-|`nifi.security.user.saml.http.client.read.timeout`| The read timeout when communicating with the SAML IDP.
+|`nifi.security.user.saml.http.client.connect.timeout`| The connection timeout when communicating with the SAML IDP. The default value is `30 secs`.
+|`nifi.security.user.saml.http.client.read.timeout`| The read timeout when communicating with the SAML IDP. The default value is `30 secs`.
 |==================================================================================================================================================
 
 [[apache_knox]]
@@ -484,7 +498,7 @@ To enable authentication via Apache Knox the following properties must be config
 | Property Name | Description
 |`nifi.security.user.knox.url` | The URL for the Apache Knox login page.
 |`nifi.security.user.knox.publicKey` | The path to the Apache Knox public key that will be used to verify the signatures of the authentication tokens in the HTTP Cookie.
-|`nifi.security.user.knox.cookieName` | The name of the HTTP Cookie that Apache Knox will generate after successful login.
+|`nifi.security.user.knox.cookieName` | The name of the HTTP Cookie that Apache Knox will generate after successful login. The default value is `hadoop-jwt`.
 |`nifi.security.user.knox.audiences` | Optional. A comma separate listed of allowed audiences. If set, the audience in the token must be present in
 this listing. The audience that is populated in the token can be configured in Knox.
 |==================================================================================================================================================
@@ -732,7 +746,11 @@ If you are setting up a secured NiFi instance for the first time, you must manua
 
 After you have edited and saved the _authorizers.xml_ file, restart NiFi.  The “Initial Admin Identity” user and administrative policies are added to the _users.xml_ and _authorizations.xml_ files during restart. Once NiFi starts, the “Initial Admin Identity” user is able to access the UI and begin managing users, groups, and policies.
 
-NOTE: For a brand new secure flow, providing the "Initial Admin Identity" gives that user access to get into the UI and to manage users, groups and policies.  But if that user wants to start modifying the flow, they need to grant themselves policies for the root process group. The system is unable to do this automatically because in a new flow the UUID of the root process group is not permanent until the _flow.xml.gz_ is generated.  If the NiFi instance is an upgrade from an existing _flow.xml.gz_ or a 1.x instance going from unsecure to secure, then the "Initial Admin Identity" user is automatically given the privileges to modify the flow.
+NOTE: For a brand new secure flow, providing the "Initial Admin Identity" gives that user access to get into the UI and to manage users, groups and policies.  But if that user wants to start
+modifying the flow, they need to grant themselves policies for the root process group. The system is unable to do this automatically because in a new flow the UUID of the root process group is not
+permanent until the _flow.json.gz_ is generated.  If the NiFi instance is an upgrade from an existing _flow.json.gz_ or a 1.x instance going from unsecure to secure, then the "Initial Admin Identity"
+user
+is automatically given the privileges to modify the flow.
 
 Some common use cases are described below.
 
@@ -1128,7 +1146,7 @@ Here is an example entry:
 
 After you have edited and saved the _authorizers.xml_ file, restart NiFi. Users and roles from the _authorized-users.xml_ file are converted and added as identities and policies in the _users.xml_ and _authorizations.xml_ files.  Once the application starts, users who previously had a legacy Administrator role can access the UI and begin managing users, groups, and policies.
 
-The following tables summarize the global and component policies assigned to each legacy role if the NiFi instance has an existing _flow.xml.gz_:
+The following tables summarize the global and component policies assigned to each legacy role if the NiFi instance has an existing _flow.json.gz_:
 
 ===== Global Access Policies
 [cols=">s,^s,^s,^s,^s,^s,^s", options="header"]
@@ -1751,6 +1769,8 @@ These algorithms use a strong Key Derivation Function to derive a secret key of 
 Each Key Derivation Function uses a static salt in order to support flow configuration comparison across cluster nodes.
 Each Key Derivation Function also uses default iteration and cost parameters as defined in the associated secure hashing implementation class.
 
+[[property-encryption-algorithms]]
+=== Property Encryption Algorithms
 The following strong encryption methods can be configured in the `nifi.sensitive.props.algorithm` property:
 
 * `NIFI_ARGON2_AES_GCM_128`
@@ -2164,9 +2184,9 @@ Any node whose dataflow, users, groups, and policies conflict with those elected
 resources with those from the cluster. How the backup is performed depends on the configured Access Policy Provider and User Group Provider.
 For file-based access policy providers, the backup will be written to the same directory as the existing file (e.g., $NIFI_HOME/conf) and bear the same
 name but with a suffix of "." and a timestamp. For example, if the flow itself conflicts with the cluster's flow at 12:05:03 on January 1, 2020,
-the node's `flow.xml.gz` file will be copied to `flow.xml.gz.2020-01-01-12-05-03` and the cluster's flow will then be written to `flow.xml.gz`.
+the node's `flow.json.gz` file will be copied to `flow.json.gz.2020-01-01-12-05-03` and the cluster's flow will then be written to `flow.json.gz`.
 Similarly, this will happen for the `users.xml` and `authorizations.xml` file. This is done so that the flow can be manually reverted if necessary
-by renaming the backup file back to `flow.xml.gz`, for example.
+by renaming the backup file back to `flow.json.gz`, for example.
 
 It is important to note that before inheriting the elected flow, NiFi will first read through the FlowFile repository and any swap files to determine which
 queues in the dataflow currently hold data. If there exists any queue in the dataflow that contains a FlowFile, that queue must also exist in the elected
@@ -2175,7 +2195,7 @@ log errors to that effect and will fail to startup. This ensures that even if th
 restarting the node will not result in data loss.
 
 Election is performed according to the "popular vote" with the caveat that the winner will never be an "empty flow" unless all flows are empty. This
-allows an administrator to remove a node's _flow.xml.gz_ file and restart the node, knowing that the node's flow will
+allows an administrator to remove a node's _flow.json.gz_ file and restart the node, knowing that the node's flow will
 not be voted to be the "correct" flow unless no other flow is found. If there are two non-empty flows that receive the same number of votes, one of those
 flows will be chosen. The methodology used to determine which of those flows is undefined and may change at any time without notice.
 
@@ -2204,7 +2224,7 @@ configured in the _state-management.xml_ file. See <<state_providers>> for more 
 ** `nifi.cluster.node.protocol.port` - Set this to an open port that is higher than 1024 (anything lower requires root).
 ** `nifi.cluster.node.protocol.max.threads` - The maximum number of threads that should be used to communicate with other nodes in the cluster. This property
 defaults to `50`. A thread pool is used for replicating requests to all nodes. The thread pool will increase the number of active threads to the limit
-set by this property. It is typically recommended that this property be set to 4-8 times the number of nodes in your cluster.
+set by this property. It is typically recommended that this property be set to 4-8 times the number of nodes in your cluster. There could be up to `n+2` threads for a given request, where `n` = number of nodes in your cluster. As an example, if 4 requests are made, a 5 node cluster will use `4 * 7 = 28` threads.
 ** `nifi.zookeeper.connect.string` - The Connect String that is needed to connect to Apache ZooKeeper. This is a comma-separated list
 of hostname:port pairs. For example, `localhost:2181,localhost:2182,localhost:2183`. This should contain a list of all ZooKeeper
 instances in the ZooKeeper quorum.
@@ -2739,11 +2759,12 @@ configured recipients whenever NiFi is stopped.
 |`nifi.died.notification.services`|This property is a comma-separated list of Notification Service identifiers that correspond to the Notification Services
                                  defined in the `notification.services.file` property. The services with the specified identifiers will be used to notify their
                                  configured recipients if the bootstrap determines that NiFi has unexpectedly died.
-|`nifi.diagnostics.on.shutdown.enabled`|(true or false) This property decides whether to run NiFi diagnostics before shutting down.
-|`nifi.diagnostics.on.shutdown.verbose`|(true or false) This property decides whether to run NiFi diagnostics in verbose mode.
-|`nifi.diagnostics.on.shutdown.directory`|This property specifies the location of the NiFi diagnostics directory.
-|`nifi.diagnostics.on.shutdown.max.filecount`|This property specifies the maximum permitted number of diagnostic files. If the limit is exceeded, the oldest files are deleted.
-|`nifi.diagnostics.on.shutdown.max.directory.size`|This property specifies the maximum permitted size of the diagnostics directory. If the limit is exceeded, the oldest files are deleted.
+|`nifi.diagnostics.on.shutdown.enabled`|(true or false) This property decides whether to run NiFi diagnostics before shutting down. The default value is `false`.
+|`nifi.diagnostics.on.shutdown.verbose`|(true or false) This property decides whether to run NiFi diagnostics in verbose mode. The default value is `false`.
+|`nifi.diagnostics.on.shutdown.directory`|This property specifies the location of the NiFi diagnostics directory. The default value is `./diagnostics`.
+|`nifi.diagnostics.on.shutdown.max.filecount`|This property specifies the maximum permitted number of diagnostic files. If the limit is exceeded, the oldest files are deleted. The default value is `10`.
+|`nifi.diagnostics.on.shutdown.max.directory.size`|This property specifies the maximum permitted size of the diagnostics directory. If the limit is exceeded, the oldest files are deleted. The default value is `10 MB`.
+|`nifi.bootstrap.listen.port`|This property defines the port used to listen for communications from NiFi. If this property is missing, empty, or `0`, a random ephemeral port is used.
 |====
 
 [[notification_services]]
@@ -3016,16 +3037,20 @@ The first section of the _nifi.properties_ file is for the Core Properties. Thes
 
 |===
 |*Property*|*Description*
-|`nifi.flow.configuration.file`*|The location of the flow configuration file (i.e., the file that contains what is currently displayed on the NiFi graph). The default value is `./conf/flow.xml.gz`.
+|`nifi.flow.configuration.file`*|The location of the XML-based flow configuration file. The default value is `./conf/flow.xml.gz`. This is a legacy property. Older versions of NiFi used an
+XML-formatted file to store the flow configuration. However, newer versions use a JSON representation. In order to maintain backward compatibility of flows and still load flows developed using
+older versions of NiFi, upon startup, NiFi will use the `nifi.flow.configuration.json.file` first. If the file exists, it will be used. However, if it does not exist, NiFi will fall back to this
+property to determine the XML version of the file and use it.
+|`nifi.flow.configuration.json.file`*|The location of the flow configuration file (i.e., the file that contains what is currently displayed on the NiFi graph). The default value is `./conf/flow.json.gz`.
 |`nifi.flow.configuration.archive.enabled`*|Specifies whether NiFi creates a backup copy of the flow automatically when the flow is updated. The default value is `true`.
-|`nifi.flow.configuration.archive.dir`*|The location of the archive directory where backup copies of the _flow.xml_ are saved. The default value is `./conf/archive`. NiFi removes old archive files to limit disk usage based on archived file lifespan, total size, and number of files, as specified with `nifi.flow.configuration.archive.max.time`, `max.storage` and `max.count` properties respectively. If none of these limitation for archiving is specified, NiFi uses default conditions, that is `30 days` for `max.time` and `500 MB` for `max.storage`. +
-This cleanup mechanism takes into account only automatically created archived _flow.xml_ files. If there are other files or directories in this archive directory, NiFi will ignore them. Automatically created archives have filename with ISO 8601 format timestamp prefix followed by `<original-filename>`. That is `<year><month><day>T<hour><minute><second>+<timezone offset>_<original filename>`. For example, `20160706T160719+0900_flow.xml.gz`. NiFi checks filenames when it cleans archive directory. If you would like to keep a particular archive in this directory without worrying about NiFi deleting it, you can do so by copying it with a different filename pattern.
-|`nifi.flow.configuration.archive.max.time`*|The lifespan of archived _flow.xml_ files. NiFi will delete expired archive files when it updates _flow.xml_ if this property is specified. Expiration is determined based on current system time and the last modified timestamp of an archived _flow.xml_. If no archive limitation is specified in _nifi.properties_, NiFi removes archives older than `30 days`.
-|`nifi.flow.configuration.archive.max.storage`*|The total data size allowed for the archived _flow.xml_ files. NiFi will delete the oldest archive files until the total archived file size becomes less than this configuration value, if this property is specified. If no archive limitation is specified in _nifi.properties_, NiFi uses `500 MB` for this.
+|`nifi.flow.configuration.archive.dir`*|The location of the archive directory where backup copies of the _flow.json_ are saved. The default value is `./conf/archive`. NiFi removes old archive files to limit disk usage based on archived file lifespan, total size, and number of files, as specified with `nifi.flow.configuration.archive.max.time`, `max.storage` and `max.count` properties respectively. If none of these limitation for archiving is specified, NiFi uses default conditions, that is `30 days` for `max.time` and `500 MB` for `max.storage`. +
+This cleanup mechanism takes into account only automatically created archived _flow.json_ files. If there are other files or directories in this archive directory, NiFi will ignore them. Automatically created archives have filename with ISO 8601 format timestamp prefix followed by `<original-filename>`. That is `<year><month><day>T<hour><minute><second>+<timezone offset>_<original filename>`. For example, `20160706T160719+0900_flow.json.gz`. NiFi checks filenames when it cleans archive directory. If you would like to keep a particular archive in this directory without worrying about NiFi deleting it, you can do so by copying it with a different filename pattern.
+|`nifi.flow.configuration.archive.max.time`*|The lifespan of archived _flow.json_ files. NiFi will delete expired archive files when it updates _flow.json_ if this property is specified. Expiration is determined based on current system time and the last modified timestamp of an archived _flow.json_. If no archive limitation is specified in _nifi.properties_, NiFi removes archives older than `30 days`.
+|`nifi.flow.configuration.archive.max.storage`*|The total data size allowed for the archived _flow.json_ files. NiFi will delete the oldest archive files until the total archived file size becomes less than this configuration value, if this property is specified. If no archive limitation is specified in _nifi.properties_, NiFi uses `500 MB` for this.
 |`nifi.flow.configuration.archive.max.count`*|The number of archive files allowed. NiFi will delete the oldest archive files so that only N latest archives can be kept, if this property is specified.
 |`nifi.flowcontroller.autoResumeState`|Indicates whether -upon restart- the components on the NiFi graph should return to their last state. The default value is `true`.
 |`nifi.flowcontroller.graceful.shutdown.period`|Indicates the shutdown period. The default value is `10 secs`.
-|`nifi.flowservice.writedelay.interval`|When many changes are made to the _flow.xml_, this property specifies how long to wait before writing out the changes, so as to batch the changes into a single write. The default value is `500 ms`.
+|`nifi.flowservice.writedelay.interval`|When many changes are made to the _flow.json_, this property specifies how long to wait before writing out the changes, so as to batch the changes into a single write. The default value is `500 ms`.
 |`nifi.administrative.yield.duration`|If a component allows an unexpected exception to escape, it is considered a bug. As a result, the framework will pause (or administratively yield) the component for this amount of time. This is done so that the component does not use up massive amounts of system resources, since it is known to have problems in the existing state. The default value is `30 secs`.
 |`nifi.bored.yield.duration`|When a component has no work to do (i.e., is "bored"), this is the amount of time it will wait before checking to see if it has new data to work on. This way, it does not use up CPU resources by checking for new work too often. When setting this property, be aware that it could add extra latency for components that do not constantly have work to do, as once they go into this "bored" state, they will wait this amount of time before checking for more work. The default value is `10 ms`.
 |`nifi.queue.backpressure.count`|When drawing a new connection between two components, this is the default value for that connection's back pressure object threshold. The default is `10000` and the value must be an integer.
@@ -3033,11 +3058,11 @@ This cleanup mechanism takes into account only automatically created archived _f
 |`nifi.authorizer.configuration.file`*|This is the location of the file that specifies how authorizers are defined.  The default value is `./conf/authorizers.xml`.
 |`nifi.login.identity.provider.configuration.file`*|This is the location of the file that specifies how username/password authentication is performed. This file is
 only considered if `nifi.security.user.login.identity.provider` is configured with a provider identifier. The default value is `./conf/login-identity-providers.xml`.
-|`nifi.templates.directory`*|This is the location of the directory where flow templates are saved (for backward compatibility only).  Templates are stored in the _flow.xml.gz_ starting with NiFi 1.0. The template directory can be used to (bulk) import templates into the _flow.xml.gz_ automatically on NiFi startup.  The default value is `./conf/templates`.
+|`nifi.templates.directory`*|This is the location of the directory where flow templates are saved (for backward compatibility only).  Templates are stored in the _flow.json.gz_ starting with NiFi 1.0. The template directory can be used to (bulk) import templates into the _flow.json.gz_ automatically on NiFi startup.  The default value is `./conf/templates`.
 |`nifi.ui.banner.text`|This is banner text that may be configured to display at the top of the User Interface. It is blank by default.
 |`nifi.ui.autorefresh.interval`|The interval at which the User Interface auto-refreshes. The default value is `30 secs`.
-|`nifi.nar.library.directory`|The location of the nar library. The default value is `./lib` and probably should be left as is. 
-|`nifi.restore.directory`|The location that certain providers (e.g. UserGroupProviders) will look for previous configurations to restore from. There is no default value. 
+|`nifi.nar.library.directory`|The location of the nar library. The default value is `./lib` and probably should be left as is.
+|`nifi.restore.directory`|The location that certain providers (e.g. UserGroupProviders) will look for previous configurations to restore from. There is no default value.
  +
 *NOTE*: Additional library directories can be specified by using the `nifi.nar.library.directory.` prefix with unique suffixes and separate paths as values. +
  +
@@ -3063,8 +3088,8 @@ for components to persist state. See the <<state_management>> section for more i
 |`nifi.state.management.configuration.file`|The XML file that contains configuration for the local and cluster-wide State Providers. The default value is `./conf/state-management.xml`.
 |`nifi.state.management.provider.local`|The ID of the Local State Provider to use. This value must match the value of the `id` element of one of the `local-provider` elements in the _state-management.xml_ file.
 |`nifi.state.management.provider.cluster`|The ID of the Cluster State Provider to use. This value must match the value of the `id` element of one of the `cluster-provider` elements in the _state-management.xml_ file. This value is ignored if not clustered but is required for nodes in a cluster.
-|`nifi.state.management.embedded.zookeeper.start`|Specifies whether or not this instance of NiFi should start an embedded ZooKeeper Server. This is used in conjunction with the ZooKeeperStateProvider.
-|`nifi.state.management.embedded.zookeeper.properties`|Specifies a properties file that contains the configuration for the embedded ZooKeeper Server that is started (if the `nifi.state.management.embedded.zookeeper.start` property is set to `true`)
+|`nifi.state.management.embedded.zookeeper.start`|Specifies whether or not this instance of NiFi should start an embedded ZooKeeper Server. This is used in conjunction with the ZooKeeperStateProvider. The default value is `false`.
+|`nifi.state.management.embedded.zookeeper.properties`|Specifies a properties file that contains the configuration for the embedded ZooKeeper Server that is started (if the `nifi.state.management.embedded.zookeeper.start` property is set to `true`). The default value is `./conf/zookeeper.properties`.
 |====
 
 
@@ -3140,7 +3165,7 @@ To do so, set the value of this property to `org.wali.MinimalLockingWriteAheadLo
 If the value of this property is changed, upon restart, NiFi will still recover the records written using the previously configured repository and delete the files written by the previously configured
 implementation.
 |`nifi.flowfile.repository.directory`*|The location of the FlowFile Repository. The default value is `./flowfile_repository`.
-|`nifi.flowfile.repository.checkpoint.interval`| The FlowFile Repository checkpoint interval. The default value is `2 mins`.
+|`nifi.flowfile.repository.checkpoint.interval`| The FlowFile Repository checkpoint interval. The default value is `20 secs`.
 |`nifi.flowfile.repository.always.sync`|If set to `true`, any change to the repository will be synchronized to the disk, meaning that NiFi will ask the operating system not to cache the information. This is very expensive and can significantly reduce NiFi performance. However, if it is `false`, there could be the potential for data loss if either there is a sudden power loss or the operating system crashes. The default value is `false`.
 |====
 
@@ -3301,8 +3326,11 @@ FlowFile Repository, if also on that disk, could become corrupt. To avoid this s
 |====
 |*Property*|*Description*
 |`nifi.content.repository.implementation`|The Content Repository implementation. The default value is `org.apache.nifi.controller.repository.FileSystemRepository` and should only be changed with caution. To store flowfile content in memory instead of on disk (at the risk of data loss in the event of power/machine failure), set this property to `org.apache.nifi.controller.repository.VolatileContentRepository`.
-|`nifi.content.claim.max.appendable.size`|The maximum size for a content claim. The default value is `1 MB`.
-|`nifi.content.claim.max.flow.files`| The max amount of claims to keep open for writing. The default value is `100`
+|`nifi.content.claim.max.appendable.size`|When NiFi processes many small FlowFiles, the contents of those FlowFiles are stored in the content repository, but we do not store the content of each
+individual FlowFile as a separate file in the content repository. Doing so would be very detrimental to performance, if each 120 byte FlowFile, for instance, was written to its own file. Instead,
+we continue writing to the same file until it reaches some threshold. This property configures that threshold. Setting the value too small can result in poor performance due to reading from and
+writing to too many files. However, a file can only be deleted from the content repository once there are no longer any FlowFiles pointing to it. Therefore, setting the value too large can result
+in data remaining in the content repository for much longer, potentially leading to the content repository running out of disk space. The default value is `50 KB`.
 |`nifi.content.repository.directory.default`*|The location of the Content Repository. The default value is `./content_repository`. +
 +
 *NOTE*: Multiple content repositories can be specified by using the `nifi.content.repository.directory.` prefix with unique suffixes and separate paths as values. +
@@ -3314,7 +3342,7 @@ For example, to provide two additional locations to act as part of the content r
 +
 Providing three total locations, including  `nifi.content.repository.directory.default`.
 |`nifi.content.repository.archive.max.retention.period`|If archiving is enabled (see `nifi.content.repository.archive.enabled` below), then
-this property specifies the maximum amount of time to keep the archived data. The default value is `12 hours`.
+this property specifies the maximum amount of time to keep the archived data. The default value is `7 days`.
 |`nifi.content.repository.archive.max.usage.percentage`|If archiving is enabled (see `nifi.content.repository.archive.enabled` below), then this property must have a value that indicates the content repository disk usage percentage at which archived data begins to be removed. If the archive is empty and content repository disk usage is above this percentage, then archiving is temporarily disabled. Archiving will resume when disk usage is below this percentage. The default value is `50%`.
 |`nifi.content.repository.archive.backpressure.percentage`| This property is used to control the content repository disk usage percentage at which backpressure is applied to the processes writing to the content repository. Once this percentage is reached, the content repository will refuse any additional writes. Writes will be refused until the archive delete process has brought the content repository disk usage percentage below `nifi.content.repository.archive.max.usage.percentage`. +
  +
@@ -3327,7 +3355,7 @@ When not set, the default value is derived as 2% greater than `nifi.content.repo
 For example, if `nifi.content.repository.archive.max.usage.percentage` is `50%` and `nifi.content.repository.archive.backpressure.percentage` is not set, the effective value of `nifi.content.repository.archive.backpressure.percentage` will be `52%`.
 |`nifi.content.repository.archive.enabled`|To enable content archiving, set this to `true` and specify a value for the `nifi.content.repository.archive.max.usage.percentage` property above. Content archiving enables the provenance UI to view or replay content that is no longer in a dataflow queue. By default, archiving is enabled.
 |`nifi.content.repository.always.sync`|If set to `true`, any change to the repository will be synchronized to the disk, meaning that NiFi will ask the operating system not to cache the information. This is very expensive and can significantly reduce NiFi performance. However, if it is `false`, there could be the potential for data loss if either there is a sudden power loss or the operating system crashes. The default value is `false`.
-|`nifi.content.viewer.url`|The URL for a web-based content viewer if one is available. It is blank by default.
+|`nifi.content.viewer.url`|The URL for a web-based content viewer if one is available. The default is `../nifi-content-viewer/`.
 |`nifi.content.repository.archive.cleanup.frequency`| The frequency with which to schedule the content archive clean up task. The default value is `1 Second`. A value lower than `1 Second` is not allowed.
 |====
 
@@ -3403,7 +3431,7 @@ For example, to provide two additional locations to act as part of the provenanc
 `nifi.provenance.repository.directory.provenance2=/repos/provenance2` +
 +
 Providing three total locations, including `nifi.provenance.repository.directory.default`.
-|`nifi.provenance.repository.max.storage.time`|The maximum amount of time to keep data provenance information. The default value is `24 hours`.
+|`nifi.provenance.repository.max.storage.time`|The maximum amount of time to keep data provenance information. The default value is `30 days`.
 |`nifi.provenance.repository.max.storage.size`|The maximum amount of data provenance information to store at a time.
 The default value is `10 GB`. The Data Provenance capability can consume a great deal of storage space because so much data is kept.
 For production environments, values of 1-2 TB or more is not uncommon. The repository will write to a single "event file" (or set of
@@ -3482,9 +3510,9 @@ For example, to provide two additional locations to act as part of the provenanc
 `nifi.provenance.repository.directory.provenance2=/repos/provenance2` +
 +
 Providing three total locations, including `nifi.provenance.repository.directory.default`.
-|`nifi.provenance.repository.max.storage.time`|The maximum amount of time to keep data provenance information. The default value is `24 hours`.
+|`nifi.provenance.repository.max.storage.time`|The maximum amount of time to keep data provenance information. The default value is `30 days`.
 |`nifi.provenance.repository.max.storage.size`|The maximum amount of data provenance information to store at a time. The default value is `10 GB`.
-|`nifi.provenance.repository.rollover.time`|The amount of time to wait before rolling over the latest data provenance information so that it is available in the User Interface. The default value is `30 secs`.
+|`nifi.provenance.repository.rollover.time`|The amount of time to wait before rolling over the latest data provenance information so that it is available in the User Interface. The default value is `10 mins`.
 |`nifi.provenance.repository.rollover.size`|The amount of information to roll over at a time. The default value is `100 MB`.
 |`nifi.provenance.repository.query.threads`|The number of threads to use for Provenance Repository queries. The default value is `2`.
 |`nifi.provenance.repository.index.threads`|The number of threads to use for indexing Provenance events so that they are searchable. The default value is `2`.
@@ -3559,7 +3587,7 @@ Remote Process Groups can choose transport protocol from RAW and HTTP. Propertie
 |====
 |*Property*|*Description*
 |`nifi.remote.input.host`|The host name that will be given out to clients to connect to this NiFi instance for Site-to-Site communication. By default, it is the value from `InetAddress.getLocalHost().getHostName()`. On UNIX-like operating systems, this is typically the output from the `hostname` command.
-|`nifi.remote.input.secure`|This indicates whether communication between this instance of NiFi and remote NiFi instances should be secure. By default, it is set to `false`. In order for secure site-to-site to work, set the property to `true`. Many other <<security_properties>> must also be configured.
+|`nifi.remote.input.secure`|This indicates whether communication between this instance of NiFi and remote NiFi instances should be secure (i.e., secure site-to-site). By default, it is set to `true`. Many other <<security_properties>> must also be configured.
 |`nifi.remote.input.socket.port`|The remote input socket port for Site-to-Site communication. By default, it is blank, but it must have a value in order to use RAW socket as transport protocol for Site-to-Site.
 |`nifi.remote.input.http.enabled`|Specifies whether HTTP Site-to-Site should be enabled on this host. By default, it is set to `true`. +
 Whether a Site-to-Site client uses HTTP or HTTPS is determined by `nifi.remote.input.secure`. If it is set to `true`, then requests are sent as HTTPS to `nifi.web.https.port`. If set to `false`, HTTP requests are sent to `nifi.web.http.port`.
@@ -3847,7 +3875,6 @@ Providing three total network interfaces, including  `nifi.web.http.network.inte
 |`nifi.web.https.port.forwarding`|Same as `nifi.web.http.port.forwarding`, but with HTTPS for secure communication. It is blank by default.
 |`nifi.web.https.ciphersuites.include`|Cipher suites used to initialize the SSLContext of the Jetty HTTPS port.  If unspecified, the runtime SSLContext defaults are used.
 |`nifi.web.https.ciphersuites.exclude`|Cipher suites that may not be used by an SSL client to establish a connection to Jetty.  If unspecified, the runtime SSLContext defaults are used.
-|`nifi.web.max.access.token.requests.per.second`| Maximum amount of requests per second the token endpoints will accept before filtering requests. The default value is `25`
 |`nifi.web.should.send.server.version`| Whether the Server header should be included in HTTP responses. The default value is `true` +
 
 In Chrome, the SSL cipher negotiated with Jetty may be examined in the 'Developer Tools' plugin, in the 'Security' tab.
@@ -3873,10 +3900,23 @@ host[:port] that NiFi is bound to.
 |`nifi.web.proxy.context.path`|A comma separated list of allowed HTTP X-ProxyContextPath, X-Forwarded-Context, or X-Forwarded-Prefix header values to consider. By default, this value is
 blank meaning all requests containing a proxy context path are rejected. Configuring this property would allow requests where the proxy path is contained in this listing.
 |`nifi.web.max.content.size`|The maximum size (HTTP `Content-Length`) for PUT and POST requests. No default value is set for backward compatibility. Providing a value for this property enables the `Content-Length` filter on all incoming API requests (except Site-to-Site and cluster communications). A suggested value is `20 MB`.
-|`nifi.web.max.requests.per.second`|The maximum number of requests from a connection per second. Requests in excess of this are first delayed, then throttled.
-|`nifi.web.max.access.token.requests.per.second`|The maximum number of requests for login Access Tokens from a connection per second. Requests in excess of this are rejected with HTTP 429.
+|`nifi.web.max.requests.per.second`|The maximum number of requests from a connection per second. Requests in excess of this are first delayed, then throttled. The default value is `30000`.
+|`nifi.web.max.access.token.requests.per.second`|The maximum number of requests for login Access Tokens from a connection per second. Requests in excess of this are rejected with HTTP 429. The default value is `25`.
 |`nifi.web.request.ip.whitelist`|A comma separated list of IP addresses. Used to specify the IP addresses of clients which can exceed the maximum requests per second (`nifi.web.max.requests.per.second`). Does not apply to web request timeout.
 |`nifi.web.request.timeout`|The request timeout for web requests. Requests running longer than this time will be forced to end with a HTTP 503 Service Unavailable response. Default value is `60 secs`.
+|`nifi.web.request.log.format`|The parameterized format for HTTP request log messages.
+The format property supports the modifiers and codes described in the Jetty
+link:https://www.eclipse.org/jetty/javadoc/jetty-9/org/eclipse/jetty/server/CustomRequestLog.html[CustomRequestLog^].
+
+The default value uses the Combined Log Format, which follows the
+link:https://en.wikipedia.org/wiki/Common_Log_Format[Common Log Format^] with the addition of `Referer` and `User-Agent`
+request headers. The default value is:
+
+`%{client}a - %u %t "%r" %s %O "%{Referer}i" "%{User-Agent}i"`
+
+The CustomRequestLog writes formatted messages using the following SLF4J logger:
+
+`org.apache.nifi.web.server.RequestLog`
 |====
 
 [[security_properties]]
@@ -3892,19 +3932,27 @@ These properties pertain to various security features in NiFi. Many of these pro
 |`nifi.sensitive.props.additional.keys`|The comma separated list of properties in _nifi.properties_ to encrypt in addition to the default sensitive properties (see <<encrypt-config_tool>>).
 |`nifi.security.autoreload.enabled`|Specifies whether the SSL context factory should be automatically reloaded if updates to the keystore and truststore are detected. By default, it is set to `false`.
 |`nifi.security.autoreload.interval`|Specifies the interval at which the keystore and truststore are checked for updates. Only applies if `nifi.security.autoreload.enabled` is set to `true`. The default value is `10 secs`.
-|`nifi.security.keystore`*|The full path and name of the keystore. It is blank by default.
-|`nifi.security.keystoreType`|The keystore type. It is blank by default.
+|`nifi.security.keystore`*|The full path and name of the keystore. The default value is `./conf/keystore.p12`.
+|`nifi.security.keystoreType`|The keystore type. The default value is `PKCS12`.
 |`nifi.security.keystorePasswd`|The keystore password. It is blank by default.
 |`nifi.security.keyPasswd`|The key password. It is blank by default.
-|`nifi.security.truststore`*|The full path and name of the truststore. It is blank by default.
-|`nifi.security.truststoreType`|The truststore type. It is blank by default.
+|`nifi.security.truststore`*|The full path and name of the truststore. The default value is `./conf/truststore.p12`.
+|`nifi.security.truststoreType`|The truststore type. The default value is `PKCS12`.
 |`nifi.security.truststorePasswd`|The truststore password. It is blank by default.
-|`nifi.security.user.authorizer`|Specifies which of the configured Authorizers in the _authorizers.xml_ file to use.  By default, it is set to `file-provider`.
-|`nifi.security.allow.anonymous.authentication`|Whether anonymous authentication is allowed when running over HTTPS. If set to true, client certificates are not required to connect via TLS.
-|`nifi.security.user.login.identity.provider`|This indicates what type of login identity provider to use. The default value is blank, can be set to the identifier from a provider
-in the file specified in `nifi.login.identity.provider.configuration.file`. Setting this property will trigger NiFi to support username/password authentication.
+|`nifi.security.user.authorizer`|Specifies which of the configured Authorizers in the _authorizers.xml_ file to use.  By default, it is set to `single-user-authorizer`.
+|`nifi.security.allow.anonymous.authentication`|Whether anonymous authentication is allowed when running over HTTPS. If set to true, client certificates are not required to connect via TLS. The default value is `false`.
+|`nifi.security.user.login.identity.provider`|This indicates what type of login identity provider to use. It can be set to the identifier from a provider in the file specified in `nifi.login.identity.provider.configuration.file`. Setting this property will trigger NiFi to support username/password authentication. The default value is `single-user-provider`.
 |`nifi.security.ocsp.responder.url`|This is the URL for the Online Certificate Status Protocol (OCSP) responder if one is being used. It is blank by default.
 |`nifi.security.ocsp.responder.certificate`|This is the location of the OCSP responder certificate if one is being used. It is blank by default.
+|====
+
+=== Bootstrap Properties
+
+These properties pertain to the connection NiFi uses to receive communications from NiFi Bootstrap.
+
+|====
+|*Property*|*Description*
+|`nifi.listener.bootstrap.port`|This property defines the port used to listen for communications from NiFi Bootstrap. If this property is missing, empty, or `0`, a random ephemeral port is used.
 |====
 
 === Identity Mapping Properties
@@ -3960,7 +4008,7 @@ Configure these properties for cluster nodes.
 |`nifi.cluster.is.node`|Set this to `true` if the instance is a node in a cluster. The default value is `false`.
 |`nifi.cluster.node.address`|The fully qualified address of the node. It is blank by default.
 |`nifi.cluster.node.protocol.port`|The node's protocol port. It is blank by default.
-|`nifi.cluster.node.protocol.max.threads`|The maximum number of threads that should be used to communicate with other nodes in the cluster. This property defaults to `50`.
+|`nifi.cluster.node.protocol.max.threads`|The maximum number of threads that should be used to communicate with other nodes in the cluster. This property defaults to `50`. When a request is made to one node, it must be forwarded to the coordinator. The coordinator then replicates it to all nodes. There could be up to `n+2` threads for a given request, where `n` = number of nodes in your cluster. As an example, if 4 requests are made, a 5 node cluster will use `4 * 7 = 28` threads.
 |`nifi.cluster.node.event.history.size`|When the state of a node in the cluster is changed, an event is generated
 and can be viewed in the Cluster page. This value indicates how many events to keep in memory for each node. The default value is `25`.
 |`nifi.cluster.node.connection.timeout`|When connecting to another node in the cluster, specifies how long this node should wait before considering
@@ -3996,14 +4044,14 @@ to join a cluster.
 |`nifi.zookeeper.connect.string`|The Connect String that is needed to connect to Apache ZooKeeper. This is a comma-separated list
 of hostname:port pairs. For example, `localhost:2181,localhost:2182,localhost:2183`. This should contain a list of all ZooKeeper
 instances in the ZooKeeper quorum. This property must be specified to join a cluster and has no default value.
-|`nifi.zookeeper.connect.timeout`|How long to wait when connecting to ZooKeeper before considering the connection a failure. The default value is `3 secs`.
-|`nifi.zookeeper.session.timeout`|How long to wait after losing a connection to ZooKeeper before the session is expired. The default value is `3 secs`.
+|`nifi.zookeeper.connect.timeout`|How long to wait when connecting to ZooKeeper before considering the connection a failure. The default value is `10 secs`.
+|`nifi.zookeeper.session.timeout`|How long to wait after losing a connection to ZooKeeper before the session is expired. The default value is `10 secs`.
 |`nifi.zookeeper.root.node`|The root ZNode that should be used in ZooKeeper. ZooKeeper provides a directory-like structure
 for storing data. Each 'directory' in this structure is referred to as a ZNode. This denotes the root ZNode, or 'directory',
-that should be used for storing data. The default value is `/root`. This is important to set correctly, as which cluster
+that should be used for storing data. The default value is `/nifi`. This is important to set correctly, as which cluster
 the NiFi instance attempts to join is determined by which ZooKeeper instance it connects to and the ZooKeeper Root Node
 that is specified.
-|`nifi.zookeeper.client.secure`|Whether to acccess ZooKeeper using client TLS.
+|`nifi.zookeeper.client.secure`|Whether to acccess ZooKeeper using client TLS. The default value is `false`.
 |`nifi.zookeeper.security.keystore`|Filename of the Keystore containing the private key to use when communicating with ZooKeeper.
 |`nifi.zookeeper.security.keystoreType`|Optional. The type of the Keystore. Must be `PKCS12`, `JKS`, or `PEM`. If not specified the type will be determined from the file extension (`.p12`, `.jks`, `.pem`).
 |`nifi.zookeeper.security.keystorePasswd`|The password for the Keystore.
@@ -4088,6 +4136,37 @@ To configure custom properties for use with NiFi’s Expression Language:
 
 Custom properties can also be configured in the NiFi UI.  See the <<user-guide.adoc#Variables_Window,Variables Window>> section in the User Guide for more information.
 
+[[nar_provider_properties]]
+=== NAR Provider Properties
+
+These properties allow configuring one or more NAR providers. A NAR provider retrieves NARs from an external source and copies them to the directory specified by `nifi.nar.library.autoload.directory`.
+
+Each NAR provider property follows the format `nifi.nar.library.provider.<identifier>.<property-name>` and each provider must have at least one property named `implementation`.
+
+==== HDFS NAR Provider ====
+
+The HDFS NAR provider retrieves NARs using the Hadoop FileSystem API. This can be used with a traditional HDFS instance or with cloud storage, such as `s3a` or `abfs`. In order to use cloud storage, the Hadoop Libraries NAR must be re-built with the cloud storage profiles enabled.
+
+|====
+|*Property*|*Description*
+|`nifi.nar.library.provider.hdfs.implementation`| The fully qualified class name of the implementation class which is `org.apache.nifi.nar.hadoop.HDFSNarProvider`.
+|`nifi.nar.library.provider.hdfs.resources`| The comma separated list of configuration resources, such as `core-site.xml`.
+|`nifi.nar.library.provider.hdfs.storage.location`| The optional storage location, such as `hdfs://hdfs-location`. If not specified, the `defaultFs` from `core-site.xml` will be used.
+|`nifi.nar.library.provider.hdfs.source.directory`| The directory within the storage location where NARs are located.
+|`nifi.nar.library.provider.hdfs.kerberos.principal`| An optional Kerberos principal for authentication. If specified, one of keytab or password must also be specified.
+|`nifi.nar.library.provider.hdfs.kerberos.keytab`| An optional Kerberos keytab for authentication.
+|`nifi.nar.library.provider.hdfs.kerberos.password`| An optional Kerberos password for authentication.
+|====
+
+==== NiFi Registry NAR Provider ====
+
+The NiFi Registry NAR provider retrieves NARs from a NiFi Registry instance. In a secure installation, this provider will retrieve NARs from all buckets that the NiFi server is authorized to read from.
+
+|====
+|*Property*|*Description*
+|`nifi.nar.library.provider.nifi-registry.implementation`| The fully qualified class name of the implementation class which is `org.apache.nifi.registry.extension.NiFiRegistryNarProvider`.
+|`nifi.nar.library.provider.nifi-registry.url`| The URL of the NiFi Registry instance, such as `http://localhost:18080`. If the URL begins with `https`, then the NiFi keystore and truststore will be used to make the TLS connection.
+|====
 
 [[upgrading_nifi]]
 == Upgrading NiFi
@@ -4168,9 +4247,9 @@ If you are using the `file-provider` authorizer, ensure that you copy the _users
 Configuration best practices recommend creating a separate location outside of the NiFi base directory for storing such configuration files, for example: `/opt/nifi/configuration-resources/`. If you are storing these files in a separate directory, you do not need to move them. Instead, ensure that the new NiFi is pointing to the same files.
 |_bootstrap-notification-services.xml_       | Use the existing NiFi _bootstrap-notification-services.xml_  file to update properties in the new NiFi.
 |_bootstrap.conf_                            | Use the existing NiFi _bootstrap.conf_ file to update properties in the new NiFi.
-|_flow.xml.gz_                               | If you retained the default location for storing flows (`<installation-directory>/conf/`), copy _flow.xml.gz_ from the existing to the new NiFi base install `conf` directory. If you stored flows to an external location via _nifi.properties_, update the property `nifi.flow.configuration.file` to point there.
+|_flow.json.gz_                               | If you retained the default location for storing flows (`<installation-directory>/conf/`), copy _flow.json.gz_ from the existing to the new NiFi base install `conf` directory. If you stored flows to an external location via _nifi.properties_, update the property `nifi.flow.configuration.file` to point there.
 
-If you are encrypting sensitive component properties in your dataflow via the sensitive properties key in _nifi.properties_, make sure the same key is used when copying over your _flow.xml.gz_.  If you need to change the key, see the <<sensitive_flow_migration>> section below.
+If you are encrypting sensitive component properties in your dataflow via the sensitive properties key in _nifi.properties_, make sure the same key is used when copying over your _flow.json.gz_.  If you need to change the key, see the <<sensitive_flow_migration>> section below.
 
 .8+|_nifi.properties_
 |Use the existing _nifi.properties_ to populate the same properties in the new NiFi file.
@@ -4181,15 +4260,17 @@ If you are encrypting sensitive component properties in your dataflow via the se
 
 If the below properties point to directories inside the NiFi base installation path, you must copy the target directories to the new NiFi. Stop your existing NiFi installation before you do this.
 
-|`nifi.flow.configuration.file=`
+|`nifi.flow.configuration.json.file=`
 
-If you have retained the default value (`./conf/flow.xml.gz`), copy _flow.xml.gz_ from the existing to the new NiFi base install conf directory.
+If you have retained the default value (`./conf/flow.json.gz`), copy _flow.json.gz_ from the existing to the new NiFi base install conf directory.
 
 If you stored flows to an external location, update the property value to point there.
 
+
+
 |`nifi.flow.configuration.archive.dir=`
 
-Same applies as above if you want to retain archived copies of the _flow.xml.gz_.
+Same applies as above if you want to retain archived copies of the _flow.json.gz_.
 
 |`nifi.database.directory=`
 
@@ -4241,22 +4322,23 @@ WARNING: Double check all configured properties for typos.
 [[sensitive_flow_migration]]
 ==== Migrating a Flow with Sensitive Properties
 
-When a value is set for `nifi.sensitive.props.key` in _nifi.properties_, the specified key is used to encrypt sensitive properties in the flow (e.g. password fields in components). If the key needs to change, the Encrypt-Config tool in the NiFi Toolkit can migrate the sensitive properties key and update the _flow.xml.gz_. Specifically, Encrypt-Config:
+When a value is set for `nifi.sensitive.props.key` in _nifi.properties_, the specified key is used to encrypt sensitive properties in the flow (e.g. password fields in components). If the key needs to change, the Encrypt-Config tool in the NiFi Toolkit can migrate the sensitive properties key and update the _flow.json.gz_. Specifically, Encrypt-Config:
 
-1. Reads the existing _flow.xml.gz_ and decrypts the sensitive values using the current key.
+1. Reads the existing _flow.json.gz_ and decrypts the sensitive values using the current key.
 2. Encrypts all the sensitive values with a specified new key.
-3. Updates the _nifi.properties_ and _flow.xml.gz_ files or creates new versions of them.
+3. Updates the _nifi.properties_ and _flow.json.gz_ files or creates new versions of them.
 
 As an example, assume version 1.9.2 is the existing NiFi instance and the sensitive properties key is set to `password`. The goal is to move the 1.9.2 _flow.xml.gz_ to a 1.10.0 instance with a new sensitive properties key: `new_password`. Running the following Encrypt-Config command would read in the _flow.xml.gz_ and _nifi.properties_ files from 1.9.2 using the original sensitive properties key and write out new versions in 1.10.0 with the sensitive properties encrypted with the new password:
 
 ```
-$ ./nifi-toolkit-1.10.0/bin/encrypt-config.sh -f /path/to/nifi/nifi-1.9.2/conf/flow.xml.gz -g /path/to/nifi/nifi-1.10.0/conf/flow.xml.gz -s new_password -n /path/to/nifi/nifi-1.9.2/conf/nifi.properties -o /path/to/nifi/nifi-1.10.0/conf/nifi.properties -x
+$ ./nifi-toolkit-1.10.0/bin/encrypt-config.sh -f /path/to/nifi/nifi-1.9.2/conf/flow.json.gz -g /path/to/nifi/nifi-1.10.0/conf/flow.json.gz -s new_password -n /path/to/nifi/nifi-1.9.2/conf/nifi
+.properties -o /path/to/nifi/nifi-1.10.0/conf/nifi.properties -x
 ```
 
 where:
 
-* `-f` specifies the source _flow.xml.gz_ (nifi-1.9.2)
-* `-g` specifies the destination _flow.xml.gz_ (nifi-1.10.0)
+* `-f` specifies the source _flow.json.gz_ (nifi-1.9.2)
+* `-g` specifies the destination _flow.json.gz_ (nifi-1.10.0)
 * `-s` specifies the new sensitive properties key (`new_password`)
 * `-n` specifies the source _nifi.properties_ (nifi-1.9.2)
 * `-o` specifies the destination _nifi.properties_ (nifi-1.10.0)
@@ -4264,15 +4346,39 @@ where:
 
 For more information see the <<toolkit-guide.adoc#encrypt_config_tool,Encrypt-Config Tool>> section in the NiFi Toolkit Guide.
 
+==== Updating the Sensitive Properties Algorithm
+
+The following command can be used to read an existing flow configuration and set a new sensitive properties algorithm in _nifi.properties_:
+
+```
+$ ./bin/nifi.sh set-sensitive-properties-algorithm <algorithm>
+```
+
+The command reads the following flow configuration file properties from _nifi.properties_:
+
+- `nifi.flow.configuration.file`
+- `nifi.flow.configuration.json.file`
+
+The command checks for the existence of each file and updates the sensitive property values found.
+
+See <<property-encryption-algorithms>> for supported values.
+
 ==== Updating the Sensitive Properties Key
 
-Starting with version 1.14.0, NiFi requires a value for 'nifi.sensitive.props.key' in _nifi.properties_.
+Starting with version 1.14.0, NiFi requires a value for `nifi.sensitive.props.key` in _nifi.properties_.
 
-The following command can be used to read an existing _flow.xml.gz_ configuration and set a new sensitive properties key in _nifi.properties_:
+The following command can be used to read an existing flow configuration and set a new sensitive properties key in _nifi.properties_:
 
 ```
 $ ./bin/nifi.sh set-sensitive-properties-key <sensitivePropertiesKey>
 ```
+
+The command reads the following flow configuration file properties from _nifi.properties_:
+
+- `nifi.flow.configuration.file`
+- `nifi.flow.configuration.json.file`
+
+The command checks for the existence of each file and updates the sensitive property values found.
 
 The minimum required length for a new sensitive properties key is 12 characters.
 
@@ -4392,18 +4498,26 @@ Example configuration:
 
 == NiFi diagnostics
 
-It is possible to run diagnostics on NiFi with
+It is possible to get diagnostics data from a NiFi node by executing the below command:
 
 ```
-$ ./bin/nifi.sh --diagnostics --verbose <dumpfilePath>
+$ ./bin/nifi.sh diagnostics --verbose <file>
 ```
 
-During the diagnostic, NiFi sends a request to an already running NiFi instance, which collects information about clusters,
-components, part of the configuration, memory usage, etc., and writes it to the specified file or, failing that, to the logs.
+If the file argument is not specified, the information would be added to the `nifi-bootstrap.log` file.
 
-The verbose switch is optional and can be used to control the level of diagnostic detail. In case of a missing dump file path, NiFi writes the diagnostics information to the bootstrap.log file.
+During the diagnostics command execution, the NiFi bootstrap process sends a request to the running NiFi instance, which collects information about the JVM, the operating system and hardware, the NARs loaded in NiFi, the flow configuration and the components being used, the long-running processor tasks, the clustering status, garbage collection, memory pool peak usage, NiFi repositories, parts of the NiFi configuration, a thread dump, etc., and writes it to the specified location.
+
+The `--verbose` flag may be provided as an option before the filename, which may result in additional diagnostic information being written.
 
 === Automatic diagnostics on restart and shutdown
 
-NiFi supports automatic diagnostics in the event of a shutdown. The feature is disabled by default. The settings can be found in the nifi.properties file and the feature can be enabled there also.
-In the case of a lengthy diagnostic, NiFi may terminate before the diagnostics are completed. In this case, the graceful.shutdown.seconds property should be set to a higher value in the bootstrap.conf.
+NiFi can be configured to automatically execute the diagnostics command in the event of a shutdown. The feature is disabled by default and can be enabled with the `nifi.diagnostics.on.shutdown.enabled` property in the `nifi.properties` configuration file. It is also possible to configure where the files should be stored and how many files should be kept using the below properties:
+
+```
+nifi.diagnostics.on.shutdown.directory=./diagnostics
+nifi.diagnostics.on.shutdown.max.filecount=10
+nifi.diagnostics.on.shutdown.max.directory.size=10 MB
+```
+
+In the case of a lengthy diagnostic, NiFi may terminate before the command execution ends. In this case, the `graceful.shutdown.seconds` property should be set to a higher value in the `bootstrap.conf` configuration file.

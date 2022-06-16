@@ -231,7 +231,7 @@ public class StandardFlowSnippet implements FlowSnippet {
             for (final ControllerServiceDTO controllerServiceDTO : dto.getControllerServices()) {
                 final BundleCoordinate bundleCoordinate = BundleUtils.getBundle(extensionManager, controllerServiceDTO.getType(), controllerServiceDTO.getBundle());
                 final ControllerServiceNode serviceNode = flowManager.createControllerService(controllerServiceDTO.getType(), controllerServiceDTO.getId(),
-                    bundleCoordinate, Collections.emptySet(), true,true);
+                    bundleCoordinate, Collections.emptySet(), true,true, null);
 
                 serviceNode.pauseValidationTrigger();
                 serviceNodes.add(serviceNode);
@@ -268,6 +268,10 @@ public class StandardFlowSnippet implements FlowSnippet {
             }
 
             label.setStyle(labelDTO.getStyle());
+            if (labelDTO.getzIndex() != null) {
+                label.setZIndex(label.getZIndex());
+            }
+
             if (!topLevel) {
                 label.setVersionedComponentId(labelDTO.getVersionedComponentId());
             }
@@ -371,6 +375,12 @@ public class StandardFlowSnippet implements FlowSnippet {
                 procNode.setPenalizationPeriod(config.getPenaltyDuration());
                 procNode.setBulletinLevel(LogLevel.valueOf(config.getBulletinLevel()));
                 procNode.setAnnotationData(config.getAnnotationData());
+                procNode.setRetryCount(config.getRetryCount());
+                procNode.setRetriedRelationships(config.getRetriedRelationships());
+                if (config.getBackoffMechanism() != null) {
+                    procNode.setBackoffMechanism(BackoffMechanism.valueOf(config.getBackoffMechanism()));
+                }
+                procNode.setMaxBackoffPeriod(config.getMaxBackoffPeriod());
                 procNode.setStyle(processorDTO.getStyle());
 
                 if (config.getRunDurationMillis() != null) {
@@ -403,6 +413,12 @@ public class StandardFlowSnippet implements FlowSnippet {
                     procNode.setAutoTerminatedRelationships(relationships);
                 }
 
+                // We need to add the processor to the ProcessGroup before calling ProcessorNode.setProperties. This will notify the FlowManager that the Processor
+                // has been added to the flow, which is important before calling ProcessorNode.setProperties, since #setProperties may call methods that result in looking
+                // up a Controller Service (such as #getClassloaderIsolationKey). The Processor must be registered with the FlowManager and its parent Process Group
+                // before that can happen, in order to ensure that it has access to any referenced Controller Service.
+                group.addProcessor(procNode);
+
                 if (config.getProperties() != null) {
                     procNode.setProperties(config.getProperties());
                 }
@@ -411,8 +427,6 @@ public class StandardFlowSnippet implements FlowSnippet {
                 final StandardProcessContext processContext = new StandardProcessContext(procNode, flowController.getControllerServiceProvider(), flowController.getEncryptor(),
                         flowController.getStateManagerProvider().getStateManager(procNode.getProcessor().getIdentifier()), () -> false, flowController);
                 procNode.onConfigurationRestored(processContext);
-
-                group.addProcessor(procNode);
             } finally {
                 procNode.resumeValidationTrigger();
             }
@@ -584,6 +598,10 @@ public class StandardFlowSnippet implements FlowSnippet {
             final Connection connection = flowManager.createConnection(connectionDTO.getId(), connectionDTO.getName(), source, destination, relationships);
             if (!topLevel) {
                 connection.setVersionedComponentId(connectionDTO.getVersionedComponentId());
+            }
+
+            if (connectionDTO.getzIndex() != null) {
+                connection.setZIndex(connection.getZIndex());
             }
 
             if (connectionDTO.getBends() != null) {

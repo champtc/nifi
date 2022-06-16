@@ -20,6 +20,7 @@ import net.schmizz.keepalive.KeepAlive;
 import net.schmizz.sshj.Config;
 import net.schmizz.sshj.SSHClient;
 import net.schmizz.sshj.connection.Connection;
+import net.schmizz.sshj.transport.Transport;
 import net.schmizz.sshj.transport.TransportException;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
 import net.schmizz.sshj.userauth.keyprovider.KeyFormat;
@@ -34,6 +35,9 @@ import net.schmizz.sshj.userauth.password.PasswordFinder;
 import net.schmizz.sshj.userauth.password.PasswordUtils;
 
 import org.apache.nifi.context.PropertyContext;
+import org.apache.nifi.processors.standard.socket.ClientAuthenticationException;
+import org.apache.nifi.processors.standard.socket.ClientConfigurationException;
+import org.apache.nifi.processors.standard.socket.ClientConnectException;
 import org.apache.nifi.processors.standard.socket.SocketFactoryProvider;
 import org.apache.nifi.processors.standard.socket.StandardSocketFactoryProvider;
 import org.apache.nifi.proxy.ProxyConfiguration;
@@ -142,6 +146,12 @@ public class StandardSSHClientProvider implements SSHClientProvider {
 
         final int dataTimeout = context.getProperty(DATA_TIMEOUT).asTimePeriod(TimeUnit.MILLISECONDS).intValue();
         client.setTimeout(dataTimeout);
+
+        // Set Transport and Connection timeouts using Socket Data Timeout property
+        final Transport transport = client.getTransport();
+        transport.setTimeoutMs(dataTimeout);
+        final Connection connection = client.getConnection();
+        connection.setTimeoutMs(dataTimeout);
 
         final boolean strictHostKeyChecking = context.getProperty(STRICT_HOST_KEY_CHECKING).asBoolean();
         final String hostKeyFilePath = context.getProperty(HOST_KEY_FILE).getValue();

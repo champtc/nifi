@@ -18,13 +18,14 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi</artifactId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
     <groupId>org.apache.nifi</groupId>
     <artifactId>nifi-commons</artifactId>
     <packaging>pom</packaging>
     <modules>
         <module>nifi-bootstrap-utils</module>
+        <module>nifi-build</module>
         <module>nifi-data-provenance-utils</module>
         <module>nifi-expression-language</module>
         <module>nifi-flowfile-packager</module>
@@ -37,7 +38,15 @@
         <module>nifi-property-encryptor</module>
         <module>nifi-property-utils</module>
         <module>nifi-properties</module>
-        <module>nifi-sensitive-property-provider</module>
+        <module>nifi-property-protection-api</module>
+        <module>nifi-property-protection-aws</module>
+        <module>nifi-property-protection-azure</module>
+        <module>nifi-property-protection-cipher</module>
+        <module>nifi-property-protection-factory</module>
+        <module>nifi-property-protection-gcp</module>
+        <module>nifi-property-protection-hashicorp</module>
+        <module>nifi-property-protection-loader</module>
+        <module>nifi-property-protection-shared</module>
         <module>nifi-record</module>
         <module>nifi-record-path</module>
         <module>nifi-repository-encryption</module>
@@ -57,5 +66,6 @@
         <module>nifi-vault-utils</module>
         <module>nifi-web-utils</module>
         <module>nifi-write-ahead-log</module>
+        <module>nifi-xml-processing</module>
     </modules>
 </project>

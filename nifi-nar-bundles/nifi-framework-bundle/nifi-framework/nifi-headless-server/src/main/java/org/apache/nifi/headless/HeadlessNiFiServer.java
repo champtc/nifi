@@ -30,6 +30,7 @@ import org.apache.nifi.authorization.exception.AuthorizerDestructionException;
 import org.apache.nifi.bundle.Bundle;
 import org.apache.nifi.controller.DecommissionTask;
 import org.apache.nifi.controller.FlowController;
+import org.apache.nifi.controller.FlowSerializationStrategy;
 import org.apache.nifi.controller.StandardFlowService;
 import org.apache.nifi.controller.flow.FlowManager;
 import org.apache.nifi.controller.repository.FlowFileEventRepository;
@@ -47,7 +48,11 @@ import org.apache.nifi.events.VolatileBulletinRepository;
 import org.apache.nifi.nar.ExtensionDiscoveringManager;
 import org.apache.nifi.nar.ExtensionManagerHolder;
 import org.apache.nifi.nar.ExtensionMapping;
+import org.apache.nifi.nar.NarAutoLoader;
+import org.apache.nifi.nar.NarClassLoadersHolder;
+import org.apache.nifi.nar.NarLoader;
 import org.apache.nifi.nar.StandardExtensionDiscoveringManager;
+import org.apache.nifi.nar.StandardNarLoader;
 import org.apache.nifi.registry.VariableRegistry;
 import org.apache.nifi.registry.flow.StandardFlowRegistryClient;
 import org.apache.nifi.registry.variable.FileBasedVariableRegistry;
@@ -60,8 +65,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.List;
 import java.util.Set;
@@ -78,6 +81,7 @@ public class HeadlessNiFiServer implements NiFiServer {
     protected FlowController flowController;
     protected FlowService flowService;
     protected DiagnosticsFactory diagnosticsFactory;
+    protected NarAutoLoader narAutoLoader;
 
     /**
      * Default constructor
@@ -98,8 +102,6 @@ public class HeadlessNiFiServer implements NiFiServer {
 
             // Enrich the flow xml using the Extension Manager mapping
             final FlowParser flowParser = new FlowParser();
-            final FlowEnricher flowEnricher = new FlowEnricher(this, flowParser, props);
-            flowEnricher.enrichFlowWithBundleInformation();
             logger.info("Loading Flow...");
 
             FlowFileEventRepository flowFileEventRepository = new RingBufferEventRepository(5);
@@ -154,7 +156,8 @@ public class HeadlessNiFiServer implements NiFiServer {
                     props,
                     encryptor,
                     null, // revision manager
-                    authorizer);
+                    authorizer,
+                    FlowSerializationStrategy.WRITE_XML_ONLY);
 
             diagnosticsFactory = new BootstrapDiagnosticsFactory();
             ((BootstrapDiagnosticsFactory) diagnosticsFactory).setFlowController(flowController);
@@ -167,6 +170,16 @@ public class HeadlessNiFiServer implements NiFiServer {
             FlowManager flowManager = flowController.getFlowManager();
             flowManager.getGroup(flowManager.getRootGroupId()).startProcessing();
 
+            final NarLoader narLoader = new StandardNarLoader(
+                    props.getExtensionsWorkingDirectory(),
+                    props.getComponentDocumentationWorkingDirectory(),
+                    NarClassLoadersHolder.getInstance(),
+                    extensionManager,
+                    new ExtensionMapping(), // Mapping is for documentation which is for the UI, not headless
+                    null); // UI Loader is for documentation which is for the UI, not headless
+
+            narAutoLoader = new NarAutoLoader(props, narLoader, extensionManager);
+            narAutoLoader.start();
             logger.info("Flow loaded successfully.");
         } catch (Exception e) {
             // ensure the flow service is terminated
@@ -217,6 +230,15 @@ public class HeadlessNiFiServer implements NiFiServer {
     public void stop() {
         try {
             flowService.stop(false);
+
+            try {
+                if (narAutoLoader != null) {
+                    narAutoLoader.stop();
+                    narAutoLoader = null;
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to stop NAR auto-loader", e);
+            }
         } catch (Exception e) {
             String msg = "Problem occurred ensuring flow controller or repository was properly terminated due to " + e;
             if (logger.isDebugEnabled()) {
@@ -234,18 +256,15 @@ public class HeadlessNiFiServer implements NiFiServer {
     private static class ThreadDumpDiagnosticsFactory implements DiagnosticsFactory {
         @Override
         public DiagnosticsDump create(final boolean verbose) {
-            return new DiagnosticsDump() {
-                @Override
-                public void writeTo(final OutputStream out) throws IOException {
-                    final DiagnosticsDumpElement threadDumpElement = new ThreadDumpTask().captureDump(verbose);
-                    final BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out));
-                    for (final String detail : threadDumpElement.getDetails()) {
-                        writer.write(detail);
-                        writer.write("\n");
-                    }
-
-                    writer.flush();
+            return out -> {
+                final DiagnosticsDumpElement threadDumpElement = new ThreadDumpTask().captureDump(verbose);
+                final BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out));
+                for (final String detail : threadDumpElement.getDetails()) {
+                    writer.write(detail);
+                    writer.write("\n");
                 }
+
+                writer.flush();
             };
         }
     }

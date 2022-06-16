@@ -210,13 +210,19 @@ public class StandardControllerServiceNode extends AbstractComponentNode impleme
     @Override
     public void reload(final Set<URL> additionalUrls) throws ControllerServiceInstantiationException {
         synchronized (this.active) {
-            if (isActive()) {
-                throw new IllegalStateException("Cannot reload Controller Service while service is active");
-            }
-            String additionalResourcesFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls);
+            final String additionalResourcesFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls, determineClasloaderIsolationKey());
             setAdditionalResourcesFingerprint(additionalResourcesFingerprint);
             getReloadComponent().reload(this, getCanonicalClassName(), getBundleCoordinate(), additionalUrls);
         }
+    }
+
+    @Override
+    public void setProperties(final Map<String, String> properties, final boolean allowRemovalOfRequiredProperties) {
+        super.setProperties(properties, allowRemovalOfRequiredProperties);
+
+        // It's possible that changing the properties of this Controller Service could alter the Classloader Isolation Key of a referencing
+        // component so reload any referencing component as necessary.
+        getReferences().findRecursiveReferences(ComponentNode.class).forEach(ComponentNode::reloadAdditionalResourcesIfNecessary);
     }
 
     @Override
@@ -332,17 +338,22 @@ public class StandardControllerServiceNode extends AbstractComponentNode impleme
 
     @Override
     public void verifyCanEnable() {
-        if (getState() != ControllerServiceState.DISABLED) {
-            throw new IllegalStateException(getControllerServiceImplementation().getIdentifier() + " cannot be enabled because it is not disabled");
+        final ControllerServiceState state = getState();
+        switch (state) {
+            case DISABLED:
+                return;
+            case DISABLING:
+                throw new IllegalStateException(getControllerServiceImplementation().getIdentifier() + " cannot be enabled because it is not disabled - it has a state of " + state);
+            default:
+                if (isReloadAdditionalResourcesNecessary()) {
+                    throw new IllegalStateException(getControllerServiceImplementation().getIdentifier() + " cannot be enabled because additional resources are needed - it has a state of " + state);
+                }
         }
     }
 
     @Override
     public void verifyCanEnable(final Set<ControllerServiceNode> ignoredReferences) {
-        final ControllerServiceState state = getState();
-        if (state != ControllerServiceState.DISABLED) {
-            throw new IllegalStateException(getControllerServiceImplementation().getIdentifier() + " cannot be enabled because it is not disabled - it has a state of " + state);
-        }
+        verifyCanEnable();
     }
 
     @Override
@@ -432,7 +443,9 @@ public class StandardControllerServiceNode extends AbstractComponentNode impleme
                     final Set<URL> classpathUrls = getAdditionalClasspathResources(context.getProperties().keySet(), descriptor -> context.getProperty(descriptor).getValue());
 
                     final ClassLoader currentClassLoader = Thread.currentThread().getContextClassLoader();
-                    try (final InstanceClassLoader detectedClassLoader = extensionManager.createInstanceClassLoader(getComponentType(), getIdentifier(), bundle, classpathUrls, false)) {
+                    final String classLoaderIsolationKey = getClassLoaderIsolationKey(context);
+                    try (final InstanceClassLoader detectedClassLoader = extensionManager.createInstanceClassLoader(getComponentType(), getIdentifier(), bundle, classpathUrls, false,
+                                classLoaderIsolationKey)) {
                         Thread.currentThread().setContextClassLoader(detectedClassLoader);
                         results.addAll(verifiable.verify(context, logger, variables));
                     } finally {

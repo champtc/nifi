@@ -16,9 +16,8 @@
  */
 package org.apache.nifi.processors.standard;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.annotation.behavior.DynamicProperty;
 import org.apache.nifi.annotation.behavior.EventDriven;
@@ -51,9 +50,11 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.security.xml.XmlUtils;
 import org.apache.nifi.util.StopWatch;
+import org.apache.nifi.xml.processing.ProcessingException;
+import org.apache.nifi.xml.processing.stream.StandardXMLStreamReaderProvider;
+import org.apache.nifi.xml.processing.stream.XMLStreamReaderProvider;
 
 import javax.xml.XMLConstants;
-import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Result;
@@ -261,18 +262,12 @@ public class TransformXml extends AbstractProcessor {
         final Long cacheTTL = context.getProperty(CACHE_TTL_AFTER_LAST_ACCESS).asTimePeriod(TimeUnit.SECONDS);
 
         if (cacheSize > 0) {
-            CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder().maximumSize(cacheSize);
+            final Caffeine<Object, Object> cacheBuilder = Caffeine.newBuilder().maximumSize(cacheSize);
             if (cacheTTL > 0) {
                 cacheBuilder.expireAfterAccess(cacheTTL, TimeUnit.SECONDS);
             }
 
-            cache = cacheBuilder.build(
-                    new CacheLoader<String, Templates>() {
-                        @Override
-                        public Templates load(final String path) throws TransformerConfigurationException, LookupFailureException {
-                            return newTemplates(context, path);
-                        }
-                    });
+            cache = cacheBuilder.build(path -> newTemplates(context, path));
         } else {
             cache = null;
             logger.info("Stylesheet cache disabled because cache size is set to 0");
@@ -370,10 +365,11 @@ public class TransformXml extends AbstractProcessor {
     }
 
     private Source getSecureSource(final StreamSource streamSource) throws TransformerConfigurationException {
+        final XMLStreamReaderProvider provider = new StandardXMLStreamReaderProvider();
         try {
-            final XMLStreamReader streamReader = XmlUtils.createSafeReader(streamSource);
+            final XMLStreamReader streamReader = provider.getStreamReader(streamSource);
             return new StAXSource(streamReader);
-        } catch (final XMLStreamException e) {
+        } catch (final ProcessingException e) {
             throw new TransformerConfigurationException("XSLT Source Stream Reader creation failed", e);
         }
     }

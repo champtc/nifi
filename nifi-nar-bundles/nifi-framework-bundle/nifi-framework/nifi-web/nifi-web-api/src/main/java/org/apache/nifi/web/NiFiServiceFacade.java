@@ -21,6 +21,7 @@ import org.apache.nifi.authorization.AuthorizeAccess;
 import org.apache.nifi.authorization.RequestAction;
 import org.apache.nifi.authorization.user.NiFiUser;
 import org.apache.nifi.bundle.BundleCoordinate;
+import org.apache.nifi.c2.protocol.component.api.RuntimeManifest;
 import org.apache.nifi.components.ConfigurableComponent;
 import org.apache.nifi.controller.ScheduledState;
 import org.apache.nifi.controller.repository.claim.ContentDirection;
@@ -28,10 +29,10 @@ import org.apache.nifi.controller.service.ControllerServiceState;
 import org.apache.nifi.flow.VersionedProcessGroup;
 import org.apache.nifi.groups.ProcessGroup;
 import org.apache.nifi.parameter.ParameterContext;
-import org.apache.nifi.registry.flow.ExternalControllerServiceReference;
+import org.apache.nifi.flow.ExternalControllerServiceReference;
 import org.apache.nifi.registry.flow.VersionedFlow;
 import org.apache.nifi.registry.flow.VersionedFlowSnapshot;
-import org.apache.nifi.registry.flow.VersionedParameterContext;
+import org.apache.nifi.flow.VersionedParameterContext;
 import org.apache.nifi.web.api.dto.AccessPolicyDTO;
 import org.apache.nifi.web.api.dto.AffectedComponentDTO;
 import org.apache.nifi.web.api.dto.BulletinBoardDTO;
@@ -130,6 +131,7 @@ import org.apache.nifi.web.api.entity.VersionControlComponentMappingEntity;
 import org.apache.nifi.web.api.entity.VersionControlInformationEntity;
 import org.apache.nifi.web.api.entity.VersionedFlowEntity;
 import org.apache.nifi.web.api.entity.VersionedFlowSnapshotMetadataEntity;
+import org.apache.nifi.web.api.request.FlowMetricsRegistry;
 
 import java.util.Collection;
 import java.util.Date;
@@ -324,6 +326,14 @@ public interface NiFiServiceFacade {
     Collection<CollectorRegistry> generateFlowMetrics();
 
     /**
+     * Generate metrics for the flow and return selected registries
+     *
+     * @param includeRegistries Set of Flow Metrics Registries to be returned
+     * @return Collector Registries
+     */
+    Collection<CollectorRegistry> generateFlowMetrics(Set<FlowMetricsRegistry> includeRegistries);
+
+    /**
      * Updates the configuration for this controller.
      *
      * @param revision Revision to compare with current base revision
@@ -404,6 +414,13 @@ public interface NiFiServiceFacade {
      * @return The list of available reporting task types matching specified criteria
      */
     Set<DocumentedTypeDTO> getReportingTaskTypes(final String bundleGroupFilter, final String bundleArtifactFilter, final String typeFilter);
+
+    /**
+     * Returns the RuntimeManifest for this NiFi instance.
+     *
+     * @return the runtime manifest
+     */
+    RuntimeManifest getRuntimeManifest();
 
     /**
      * Returns the list of prioritizer types.
@@ -1606,6 +1623,16 @@ public interface NiFiServiceFacade {
      * @return the current Process Group converted to a Versioned Flow Snapshot for download
      */
     VersionedFlowSnapshot getCurrentFlowSnapshotByGroupId(String processGroupId);
+
+    /**
+     * Get the current state of the Process Group with the given ID, converted to a Versioned Flow Snapshot. Controller
+     * Services referenced by the Components contained by the Process Group but are part of the parent Process Group(s)
+     * will be included and will be considered as part of the requested Process Group.
+     *
+     * @param processGroupId the ID of the Process Group
+     * @return the current Process Group converted to a Versioned Flow Snapshot for download
+     */
+    VersionedFlowSnapshot getCurrentFlowSnapshotByGroupIdWithReferencedControllerServices(String processGroupId);
 
     /**
      * Returns the name of the Flow Registry that is registered with the given ID. If no Flow Registry exists with the given ID, will return

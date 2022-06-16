@@ -22,6 +22,7 @@ import org.apache.nifi.attribute.expression.language.StandardPropertyValue;
 import org.apache.nifi.attribute.expression.language.VariableImpact;
 import org.apache.nifi.bundle.Bundle;
 import org.apache.nifi.bundle.BundleCoordinate;
+import org.apache.nifi.components.ClassloaderIsolationKeyProvider;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ConfigVerificationResult.Outcome;
 import org.apache.nifi.components.ConfigurableComponent;
@@ -65,6 +66,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -236,6 +238,9 @@ public abstract class AbstractComponentNode implements ComponentNode {
         try {
             verifyCanUpdateProperties(properties);
 
+            // Determine the Classloader Isolation Key, if applicable, so we can determine whether or not the key changes by setting properties.
+            final String initialIsolationKey = determineClasloaderIsolationKey();
+
             final PropertyConfigurationMapper configurationMapper = new PropertyConfigurationMapper();
             final Map<String, PropertyConfiguration> configurationMap = configurationMapper.mapRawPropertyValuesToPropertyConfiguration(this, properties);
 
@@ -273,8 +278,12 @@ public abstract class AbstractComponentNode implements ComponentNode {
                     }
                 }
 
+                // Determine the updated Classloader Isolation Key, if applicable.
+                final String updatedIsolationKey = determineClasloaderIsolationKey();
+                final boolean classloaderIsolationKeyChanged = !Objects.equals(initialIsolationKey, updatedIsolationKey);
+
                 // if at least one property with dynamicallyModifiesClasspath(true) was set, then reload the component with the new urls
-                if (classpathChanged) {
+                if (classpathChanged || classloaderIsolationKeyChanged) {
                     logger.info("Updating classpath for " + this.componentType + " with the ID " + this.getIdentifier());
 
                     final Set<URL> additionalUrls = getAdditionalClasspathResources(getComponent().getPropertyDescriptors());
@@ -297,6 +306,18 @@ public abstract class AbstractComponentNode implements ComponentNode {
         }
     }
 
+    protected String determineClasloaderIsolationKey() {
+        final ConfigurableComponent component = getComponent();
+        if (!(component instanceof ClassloaderIsolationKeyProvider)) {
+            return null;
+        }
+
+        final ValidationContext validationContext = getValidationContextFactory().newValidationContext(getProperties(), getAnnotationData(), getProcessGroupIdentifier(), getIdentifier(),
+            getParameterContext(), true);
+
+        return getClassLoaderIsolationKey(validationContext);
+    }
+
     public void verifyCanUpdateProperties(final Map<String, String> properties) {
         verifyModifiable();
 
@@ -311,7 +332,11 @@ public abstract class AbstractComponentNode implements ComponentNode {
 
             final PropertyDescriptor descriptor = getPropertyDescriptor(propertyName);
 
-            if (descriptor.isSensitive()) {
+            // We don't want to allow a sensitive property to reference a parameter unless the value is solely a parameter reference. I.e.,
+            // #{abc} is ok but password#{abc} is not.
+            // However, for "ghost" components (isExtensionMissing() == true) we need to allow this, because we consider all properties sensitive.
+            // If we don't allow this, we'll fail to even create the ghost component.
+            if (descriptor.isSensitive() && !isExtensionMissing()) {
                 if (referenceList.size() > 1) {
                     throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' cannot reference more than one Parameter because it is a sensitive property.");
                 }
@@ -322,22 +347,12 @@ public abstract class AbstractComponentNode implements ComponentNode {
                         throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' is a sensitive property so it can reference a Parameter only if there is no other " +
                             "context around the value. For instance, the value '#{abc}' is allowed but 'password#{abc}' is not allowed.");
                     }
-
-                    final ParameterContext parameterContext = getParameterContext();
-                    if (parameterContext != null) {
-                        final Optional<Parameter> parameter = parameterContext.getParameter(reference.getParameterName());
-                        if (parameter.isPresent() && !parameter.get().getDescriptor().isSensitive()) {
-                            throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' is a sensitive property, so it can only reference Parameters that are sensitive.");
-                        }
-                    }
                 }
             }
 
-            if (descriptor.getControllerServiceDefinition() != null) {
-                if (!referenceList.isEmpty()) {
-                    throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' cannot reference a Parameter because the property is a Controller Service reference. " +
-                        "Allowing Controller Service references to make use of Parameters could result in security issues and a poor user experience. As a result, this is not allowed.");
-                }
+            if (descriptor.getControllerServiceDefinition() != null && !referenceList.isEmpty()) {
+                throw new IllegalArgumentException("The property '" + descriptor.getDisplayName() + "' cannot reference a Parameter because the property is a Controller Service reference. " +
+                    "Allowing Controller Service references to make use of Parameters could result in security issues and a poor user experience. As a result, this is not allowed.");
             }
         }
     }
@@ -442,20 +457,21 @@ public abstract class AbstractComponentNode implements ComponentNode {
         final PropertyConfiguration oldConfiguration = properties.put(descriptor, propertyConfiguration);
         final String effectiveValue = propertyConfiguration.getEffectiveValue(getParameterContext());
 
-        if (!propertyConfiguration.equals(oldConfiguration)) {
-            if (descriptor.getControllerServiceDefinition() != null) {
-                if (oldConfiguration != null) {
-                    final String oldEffectiveValue = oldConfiguration.getEffectiveValue(getParameterContext());
-                    final ControllerServiceNode oldNode = serviceProvider.getControllerServiceNode(oldEffectiveValue);
-                    if (oldNode != null) {
-                        oldNode.removeReference(this, descriptor);
-                    }
+        // If the property references a Controller Service, we need to register this component & property descriptor as a reference.
+        // If it previously referenced a Controller Service, we need to also remove that reference.
+        // It is okay if the new & old values are the same - we just unregister the component/descriptor and re-register it.
+        if (descriptor.getControllerServiceDefinition() != null) {
+            if (oldConfiguration != null) {
+                final String oldEffectiveValue = oldConfiguration.getEffectiveValue(getParameterContext());
+                final ControllerServiceNode oldNode = serviceProvider.getControllerServiceNode(oldEffectiveValue);
+                if (oldNode != null) {
+                    oldNode.removeReference(this, descriptor);
                 }
+            }
 
-                final ControllerServiceNode newNode = serviceProvider.getControllerServiceNode(effectiveValue);
-                if (newNode != null) {
-                    newNode.addReference(this, descriptor);
-                }
+            final ControllerServiceNode newNode = serviceProvider.getControllerServiceNode(effectiveValue);
+            if (newNode != null) {
+                newNode.addReference(this, descriptor);
             }
         }
 
@@ -585,7 +601,10 @@ public abstract class AbstractComponentNode implements ComponentNode {
         // use setProperty instead of setProperties so we can bypass the class loading logic.
         // Consider value changed if it is different than the PropertyDescriptor's default value because we need to call the #onPropertiesModified
         // method on the component if the current value is not the default value, since the component itself is being reloaded.
-        for (final Map.Entry<PropertyDescriptor, PropertyConfiguration> entry : this.properties.entrySet()) {
+        // Also, create a copy of this.properties instead of iterating directly over this.properties since the call to setProperty can change the
+        // underlying map, and the behavior of modifying the map while iterating over its elements is undefined.
+        final Map<PropertyDescriptor, PropertyConfiguration> copyOfPropertiesMap = new HashMap<>(this.properties);
+        for (final Map.Entry<PropertyDescriptor, PropertyConfiguration> entry : copyOfPropertiesMap.entrySet()) {
             final PropertyDescriptor propertyDescriptor = entry.getKey();
             final PropertyConfiguration configuration = entry.getValue();
 
@@ -606,6 +625,25 @@ public abstract class AbstractComponentNode implements ComponentNode {
 
     /**
      * Generates fingerprint for the additional urls and compares it with the previous
+     * fingerprint value.
+     */
+    @Override
+    public synchronized boolean isReloadAdditionalResourcesNecessary() {
+        // Components that don't have any PropertyDescriptors marked `dynamicallyModifiesClasspath`
+        // won't have the fingerprint i.e. will be null, in such cases do nothing
+        if (additionalResourcesFingerprint == null) {
+            return false;
+        }
+
+        final Set<PropertyDescriptor> descriptors = this.getProperties().keySet();
+        final Set<URL> additionalUrls = this.getAdditionalClasspathResources(descriptors);
+
+        final String newFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls, determineClasloaderIsolationKey());
+        return (!StringUtils.equals(additionalResourcesFingerprint, newFingerprint));
+    }
+
+    /**
+     * Generates fingerprint for the additional urls and compares it with the previous
      * fingerprint value. If the fingerprint values don't match, the function calls the
      * component's reload() to load the newly found resources.
      */
@@ -620,7 +658,7 @@ public abstract class AbstractComponentNode implements ComponentNode {
         final Set<PropertyDescriptor> descriptors = this.getProperties().keySet();
         final Set<URL> additionalUrls = this.getAdditionalClasspathResources(descriptors);
 
-        final String newFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls);
+        final String newFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls, determineClasloaderIsolationKey());
         if(!StringUtils.equals(additionalResourcesFingerprint, newFingerprint)) {
             setAdditionalResourcesFingerprint(newFingerprint);
             try {
@@ -771,7 +809,9 @@ public abstract class AbstractComponentNode implements ComponentNode {
                             .valid(false)
                             .explanation("Property references Parameter '" + paramName + "' but the currently selected Parameter Context does not have a Parameter with that name")
                             .build());
+                    continue;
                 }
+
                 final Optional<Parameter> parameterRef = parameterContext.getParameter(paramName);
                 if (parameterRef.isPresent()) {
                     final ParameterDescriptor parameterDescriptor = parameterRef.get().getDescriptor();

@@ -174,6 +174,11 @@ public class StandardControllerServiceProvider implements ControllerServiceProvi
 
     @Override
     public CompletableFuture<Void> enableControllerService(final ControllerServiceNode serviceNode) {
+        if (serviceNode.isActive()) {
+            final CompletableFuture<Void> future = CompletableFuture.completedFuture(null);
+            return future;
+        }
+
         serviceNode.verifyCanEnable();
         serviceNode.reloadAdditionalResourcesIfNecessary();
         return processScheduler.enableControllerService(serviceNode);
@@ -231,18 +236,6 @@ public class StandardControllerServiceProvider implements ControllerServiceProvi
     private void enableControllerServices(final Collection<ControllerServiceNode> serviceNodes, final CompletableFuture<Void> completableFuture) {
         // validate that we are able to start all of the services.
         for (final ControllerServiceNode controllerServiceNode : serviceNodes) {
-            List<ControllerServiceNode> requiredServices = controllerServiceNode.getRequiredControllerServices();
-            for (ControllerServiceNode requiredService : requiredServices) {
-                if (!requiredService.isActive() && !serviceNodes.contains(requiredService)) {
-                    logger.error("Cannot enable {} because it has a dependency on {}, which is not enabled", controllerServiceNode, requiredService);
-                    completableFuture.completeExceptionally(new IllegalStateException("Cannot enable " + controllerServiceNode
-                        + " because it has a dependency on " + requiredService + ", which is not enabled"));
-                    return;
-                }
-            }
-        }
-
-        for (final ControllerServiceNode controllerServiceNode : serviceNodes) {
             if (completableFuture.isCancelled()) {
                 return;
             }
@@ -285,8 +278,7 @@ public class StandardControllerServiceProvider implements ControllerServiceProvi
 
     @Override
     public Future<Void> enableControllerServiceAndDependencies(final ControllerServiceNode serviceNode) {
-        final ControllerServiceState currentState = serviceNode.getState();
-        if (currentState == ControllerServiceState.ENABLED) {
+        if (serviceNode.isActive()) {
             logger.debug("Enabling of Controller Service {} triggered but service already enabled", serviceNode);
             return CompletableFuture.completedFuture(null);
         }
@@ -457,11 +449,9 @@ public class StandardControllerServiceProvider implements ControllerServiceProvi
             return (rootServiceNode == null) ? null : rootServiceNode.getProxiedControllerService();
         }
 
-        final Set<ControllerServiceNode> servicesForGroup = groupOfInterest.getControllerServices(true);
-        for (final ControllerServiceNode serviceNode : servicesForGroup) {
-            if (serviceIdentifier.equals(serviceNode.getIdentifier())) {
-                return serviceNode.getProxiedControllerService();
-            }
+        final ControllerServiceNode serviceNode = groupOfInterest.findControllerService(serviceIdentifier, false, true);
+        if (serviceNode != null) {
+            return serviceNode.getProxiedControllerService();
         }
 
         return null;
@@ -528,15 +518,14 @@ public class StandardControllerServiceProvider implements ControllerServiceProvi
     @Override
     public void removeControllerService(final ControllerServiceNode serviceNode) {
         requireNonNull(serviceNode);
-        serviceCache.remove(serviceNode.getIdentifier());
 
         final ProcessGroup group = serviceNode.getProcessGroup();
         if (group == null) {
             flowManager.removeRootControllerService(serviceNode);
-            return;
+        } else {
+            group.removeControllerService(serviceNode);
         }
 
-        group.removeControllerService(serviceNode);
         LogRepositoryFactory.removeRepository(serviceNode.getIdentifier());
         extensionManager.removeInstanceClassLoader(serviceNode.getIdentifier());
         serviceCache.remove(serviceNode.getIdentifier());

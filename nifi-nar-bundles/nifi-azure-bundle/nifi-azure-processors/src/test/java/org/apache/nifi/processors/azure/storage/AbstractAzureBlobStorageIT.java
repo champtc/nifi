@@ -20,12 +20,14 @@ import com.microsoft.azure.storage.blob.CloudBlob;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import org.apache.nifi.processors.azure.storage.utils.AzureStorageUtils;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.UUID;
+
+import static org.apache.nifi.processors.azure.AzureServiceEndpoints.DEFAULT_BLOB_ENDPOINT_SUFFIX;
 
 public abstract class AbstractAzureBlobStorageIT extends AbstractAzureStorageIT {
 
@@ -36,7 +38,12 @@ public abstract class AbstractAzureBlobStorageIT extends AbstractAzureStorageIT 
 
     protected CloudBlobContainer container;
 
-    @Before
+    @Override
+    protected String getDefaultEndpointSuffix() {
+        return DEFAULT_BLOB_ENDPOINT_SUFFIX;
+    }
+
+    @BeforeEach
     public void setUpAzureBlobStorageIT() throws Exception {
         String containerName = String.format("%s-%s", TEST_CONTAINER_NAME_PREFIX, UUID.randomUUID());
         CloudBlobClient blobClient = getStorageAccount().createCloudBlobClient();
@@ -46,7 +53,7 @@ public abstract class AbstractAzureBlobStorageIT extends AbstractAzureStorageIT 
         runner.setProperty(AzureStorageUtils.CONTAINER, containerName);
     }
 
-    @After
+    @AfterEach
     public void tearDownAzureBlobStorageIT() throws Exception {
         container.deleteIfExists();
     }

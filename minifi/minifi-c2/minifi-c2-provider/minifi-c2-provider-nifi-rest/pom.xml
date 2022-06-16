@@ -20,7 +20,7 @@ limitations under the License.
     <parent>
         <artifactId>minifi-c2-provider</artifactId>
         <groupId>org.apache.nifi.minifi</groupId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
     <artifactId>minifi-c2-provider-nifi-rest</artifactId>
     <packaging>jar</packaging>
@@ -39,7 +39,6 @@ limitations under the License.
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
@@ -59,7 +58,7 @@ limitations under the License.
 
         <dependency>
             <groupId>org.mockito</groupId>
-            <artifactId>mockito-all</artifactId>
+            <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -79,4 +78,8 @@ limitations under the License.
             </plugin>
         </plugins>
     </build>
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

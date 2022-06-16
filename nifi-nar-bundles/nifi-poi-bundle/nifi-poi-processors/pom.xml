@@ -17,13 +17,13 @@
     <modelVersion>4.0.0</modelVersion>
 
     <properties>
-        <poi.version>5.0.0</poi.version>
+        <poi.version>5.2.2</poi.version>
     </properties>
 
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-poi-bundle</artifactId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
 
     <artifactId>nifi-poi-processors</artifactId>
@@ -75,19 +75,23 @@
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
-            <artifactId>nifi-processor-utils</artifactId>
-            <version>1.15.4-SNAPSHOT</version>
+            <artifactId>nifi-utils</artifactId>
+            <version>1.16.4-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-standard-record-utils</artifactId>
-            <version>1.15.4-SNAPSHOT</version>
+            <version>1.16.4-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-mock</artifactId>
-            <version>1.15.4-SNAPSHOT</version>
+            <version>1.16.4-SNAPSHOT</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

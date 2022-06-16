@@ -28,6 +28,7 @@ import org.apache.nifi.controller.AbstractControllerService;
 import org.apache.nifi.controller.ConfigurationContext;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.processor.util.StandardValidators;
+import org.apache.nifi.processors.azure.AzureServiceEndpoints;
 import org.apache.nifi.processors.azure.storage.utils.AzureStorageUtils;
 
 import java.util.ArrayList;
@@ -60,49 +61,27 @@ public class ADLSCredentialsControllerService extends AbstractControllerService 
             .description("Storage accounts in public Azure always use a common FQDN suffix. " +
                     "Override this endpoint suffix with a different suffix in certain circumstances (like Azure Stack or non-public Azure regions).")
             .required(true)
-            .defaultValue("dfs.core.windows.net")
+            .defaultValue(AzureServiceEndpoints.DEFAULT_ADLS_ENDPOINT_SUFFIX)
             .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
             .build();
 
     public static final PropertyDescriptor USE_MANAGED_IDENTITY = new PropertyDescriptor.Builder()
             .name("storage-use-managed-identity")
             .displayName("Use Azure Managed Identity")
-            .description("Choose whether or not to use the managed identity of Azure VM/VMSS ")
+            .description("Choose whether or not to use the managed identity of Azure VM/VMSS")
             .required(false)
             .defaultValue("false")
             .allowableValues("true", "false")
             .addValidator(StandardValidators.BOOLEAN_VALIDATOR)
             .build();
 
-    public static final PropertyDescriptor SERVICE_PRINCIPAL_TENANT_ID = new PropertyDescriptor.Builder()
-            .name("service-principal-tenant-id")
-            .displayName("Service Principal Tenant ID")
-            .description("Tenant ID of the Azure Active Directory hosting the Service Principal. The property is required when Service Principal authentication is used.")
-            .sensitive(true)
-            .required(false)
-            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
-            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
-            .build();
+    public static final PropertyDescriptor MANAGED_IDENTITY_CLIENT_ID = AzureStorageUtils.MANAGED_IDENTITY_CLIENT_ID;
 
-    public static final PropertyDescriptor SERVICE_PRINCIPAL_CLIENT_ID = new PropertyDescriptor.Builder()
-            .name("service-principal-client-id")
-            .displayName("Service Principal Client ID")
-            .description("Client ID (or Application ID) of the Client/Application having the Service Principal. The property is required when Service Principal authentication is used.")
-            .sensitive(true)
-            .required(false)
-            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
-            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
-            .build();
+    public static final PropertyDescriptor SERVICE_PRINCIPAL_TENANT_ID = AzureStorageUtils.SERVICE_PRINCIPAL_TENANT_ID;
 
-    public static final PropertyDescriptor SERVICE_PRINCIPAL_CLIENT_SECRET = new PropertyDescriptor.Builder()
-            .name("service-principal-client-secret")
-            .displayName("Service Principal Client Secret")
-            .description("Password of the Client/Application. The property is required when Service Principal authentication is used.")
-            .sensitive(true)
-            .required(false)
-            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
-            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
-            .build();
+    public static final PropertyDescriptor SERVICE_PRINCIPAL_CLIENT_ID = AzureStorageUtils.SERVICE_PRINCIPAL_CLIENT_ID;
+
+    public static final PropertyDescriptor SERVICE_PRINCIPAL_CLIENT_SECRET = AzureStorageUtils.SERVICE_PRINCIPAL_CLIENT_SECRET;
 
     private static final List<PropertyDescriptor> PROPERTIES = Collections.unmodifiableList(Arrays.asList(
             ACCOUNT_NAME,
@@ -110,6 +89,7 @@ public class ADLSCredentialsControllerService extends AbstractControllerService 
             AzureStorageUtils.ACCOUNT_KEY,
             AzureStorageUtils.PROP_SAS_TOKEN,
             USE_MANAGED_IDENTITY,
+            MANAGED_IDENTITY_CLIENT_ID,
             SERVICE_PRINCIPAL_TENANT_ID,
             SERVICE_PRINCIPAL_CLIENT_ID,
             SERVICE_PRINCIPAL_CLIENT_SECRET
@@ -126,39 +106,50 @@ public class ADLSCredentialsControllerService extends AbstractControllerService 
     protected Collection<ValidationResult> customValidate(ValidationContext validationContext) {
         final List<ValidationResult> results = new ArrayList<>();
 
-        boolean accountKeySet = StringUtils.isNotBlank(validationContext.getProperty(AzureStorageUtils.ACCOUNT_KEY).getValue());
-        boolean sasTokenSet = StringUtils.isNotBlank(validationContext.getProperty(AzureStorageUtils.PROP_SAS_TOKEN).getValue());
-        boolean useManagedIdentitySet = validationContext.getProperty(USE_MANAGED_IDENTITY).asBoolean();
+        final boolean accountKeySet = StringUtils.isNotBlank(validationContext.getProperty(AzureStorageUtils.ACCOUNT_KEY).getValue());
+        final boolean sasTokenSet = StringUtils.isNotBlank(validationContext.getProperty(AzureStorageUtils.PROP_SAS_TOKEN).getValue());
+        final boolean useManagedIdentitySet = validationContext.getProperty(USE_MANAGED_IDENTITY).asBoolean();
 
-        boolean servicePrincipalTenantIdSet = StringUtils.isNotBlank(validationContext.getProperty(SERVICE_PRINCIPAL_TENANT_ID).getValue());
-        boolean servicePrincipalClientIdSet = StringUtils.isNotBlank(validationContext.getProperty(SERVICE_PRINCIPAL_CLIENT_ID).getValue());
-        boolean servicePrincipalClientSecretSet = StringUtils.isNotBlank(validationContext.getProperty(SERVICE_PRINCIPAL_CLIENT_SECRET).getValue());
+        final boolean servicePrincipalTenantIdSet = StringUtils.isNotBlank(validationContext.getProperty(SERVICE_PRINCIPAL_TENANT_ID).getValue());
+        final boolean servicePrincipalClientIdSet = StringUtils.isNotBlank(validationContext.getProperty(SERVICE_PRINCIPAL_CLIENT_ID).getValue());
+        final boolean servicePrincipalClientSecretSet = StringUtils.isNotBlank(validationContext.getProperty(SERVICE_PRINCIPAL_CLIENT_SECRET).getValue());
 
-        boolean servicePrincipalSet = servicePrincipalTenantIdSet || servicePrincipalClientIdSet || servicePrincipalClientSecretSet;
+        final boolean servicePrincipalSet = servicePrincipalTenantIdSet || servicePrincipalClientIdSet || servicePrincipalClientSecretSet;
+
+        final String managedIdentityClientId = validationContext.getProperty(MANAGED_IDENTITY_CLIENT_ID).getValue();
 
         if (!onlyOneSet(accountKeySet, sasTokenSet, useManagedIdentitySet, servicePrincipalSet)) {
             results.add(new ValidationResult.Builder().subject(this.getClass().getSimpleName())
                 .valid(false)
                 .explanation("one and only one authentication method of [Account Key, SAS Token, Managed Identity, Service Principal] should be used")
                 .build());
-        } else if (servicePrincipalSet) {
-            String template = "'%s' must be set when Service Principal authentication is being configured";
-            if (!servicePrincipalTenantIdSet) {
-                results.add(new ValidationResult.Builder().subject(this.getClass().getSimpleName())
-                        .valid(false)
-                        .explanation(String.format(template, SERVICE_PRINCIPAL_TENANT_ID.getDisplayName()))
-                        .build());
+        } else {
+            if (servicePrincipalSet) {
+                final String template = "'%s' must be set when Service Principal authentication is being configured";
+                if (!servicePrincipalTenantIdSet) {
+                    results.add(new ValidationResult.Builder().subject(this.getClass().getSimpleName())
+                            .valid(false)
+                            .explanation(String.format(template, SERVICE_PRINCIPAL_TENANT_ID.getDisplayName()))
+                            .build());
+                }
+                if (!servicePrincipalClientIdSet) {
+                    results.add(new ValidationResult.Builder().subject(this.getClass().getSimpleName())
+                            .valid(false)
+                            .explanation(String.format(template, SERVICE_PRINCIPAL_CLIENT_ID.getDisplayName()))
+                            .build());
+                }
+                if (!servicePrincipalClientSecretSet) {
+                    results.add(new ValidationResult.Builder().subject(this.getClass().getSimpleName())
+                            .valid(false)
+                            .explanation(String.format(template, SERVICE_PRINCIPAL_CLIENT_SECRET.getDisplayName()))
+                            .build());
+                }
             }
-            if (!servicePrincipalClientIdSet) {
+
+            if (!useManagedIdentitySet && StringUtils.isNotEmpty(managedIdentityClientId)) {
                 results.add(new ValidationResult.Builder().subject(this.getClass().getSimpleName())
                         .valid(false)
-                        .explanation(String.format(template, SERVICE_PRINCIPAL_CLIENT_ID.getDisplayName()))
-                        .build());
-            }
-            if (!servicePrincipalClientSecretSet) {
-                results.add(new ValidationResult.Builder().subject(this.getClass().getSimpleName())
-                        .valid(false)
-                        .explanation(String.format(template, SERVICE_PRINCIPAL_CLIENT_SECRET.getDisplayName()))
+                        .explanation(String.format("'%s' can only be configured when '%s' is set to true", MANAGED_IDENTITY_CLIENT_ID.getDisplayName(), USE_MANAGED_IDENTITY.getDisplayName()))
                         .build());
             }
         }
@@ -188,6 +179,7 @@ public class ADLSCredentialsControllerService extends AbstractControllerService 
         setValue(credentialsBuilder, AzureStorageUtils.PROP_SAS_TOKEN, PropertyValue::getValue, ADLSCredentialsDetails.Builder::setSasToken, attributes);
         setValue(credentialsBuilder, ENDPOINT_SUFFIX, PropertyValue::getValue, ADLSCredentialsDetails.Builder::setEndpointSuffix, attributes);
         setValue(credentialsBuilder, USE_MANAGED_IDENTITY, PropertyValue::asBoolean, ADLSCredentialsDetails.Builder::setUseManagedIdentity, attributes);
+        setValue(credentialsBuilder, MANAGED_IDENTITY_CLIENT_ID, PropertyValue::getValue, ADLSCredentialsDetails.Builder::setManagedIdentityClientId, attributes);
         setValue(credentialsBuilder, SERVICE_PRINCIPAL_TENANT_ID, PropertyValue::getValue, ADLSCredentialsDetails.Builder::setServicePrincipalTenantId, attributes);
         setValue(credentialsBuilder, SERVICE_PRINCIPAL_CLIENT_ID, PropertyValue::getValue, ADLSCredentialsDetails.Builder::setServicePrincipalClientId, attributes);
         setValue(credentialsBuilder, SERVICE_PRINCIPAL_CLIENT_SECRET, PropertyValue::getValue, ADLSCredentialsDetails.Builder::setServicePrincipalClientSecret, attributes);

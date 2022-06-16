@@ -17,7 +17,6 @@
 
 package org.apache.nifi.minifi.bootstrap.util;
 
-
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.minifi.bootstrap.configuration.ConfigurationChangeException;
@@ -46,20 +45,16 @@ import org.apache.nifi.minifi.commons.schema.common.ConvertableSchema;
 import org.apache.nifi.minifi.commons.schema.common.Schema;
 import org.apache.nifi.minifi.commons.schema.common.StringUtil;
 import org.apache.nifi.minifi.commons.schema.serialization.SchemaLoader;
+import org.apache.nifi.util.NiFiProperties;
+import org.apache.nifi.xml.processing.ProcessingException;
+import org.apache.nifi.xml.processing.parsers.StandardDocumentProvider;
+import org.apache.nifi.xml.processing.transform.StandardTransformProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.FileOutputStream;
@@ -69,7 +64,9 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -80,9 +77,10 @@ import java.util.zip.GZIPOutputStream;
 
 public final class ConfigTransformer {
     // Underlying version of NIFI will be using
-    public static final String NIFI_VERSION = "1.8.0";
     public static final String ROOT_GROUP = "Root-Group";
-    public static final String NIFI_VERSION_KEY = "nifi.version";
+
+    private static final Base64.Encoder KEY_ENCODER = Base64.getEncoder().withoutPadding();
+    private static final int SENSITIVE_PROPERTIES_KEY_LENGTH = 24;
 
     public static final Logger logger = LoggerFactory.getLogger(ConfigTransformer.class);
 
@@ -145,20 +143,18 @@ public final class ConfigTransformer {
         }
     }
 
-    protected static void writeFlowXmlFile(ConfigSchema configSchema, OutputStream outputStream) throws TransformerException, ConfigTransformerException, ConfigurationChangeException, IOException {
+    protected static void writeFlowXmlFile(ConfigSchema configSchema, OutputStream outputStream) throws ConfigTransformerException {
         final StreamResult streamResult = new StreamResult(outputStream);
 
         // configure the transformer and convert the DOM
-        final TransformerFactory transformFactory = TransformerFactory.newInstance();
-        final Transformer transformer = transformFactory.newTransformer();
-        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
-        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+        final StandardTransformProvider transformProvider = new StandardTransformProvider();
+        transformProvider.setIndent(true);
 
         // transform the document to byte stream
-        transformer.transform(createFlowXml(configSchema), streamResult);
+        transformProvider.transform(createFlowXml(configSchema), streamResult);
     }
 
-    protected static void writeFlowXmlFile(ConfigSchema configSchema, String path) throws IOException, TransformerException, ConfigurationChangeException, ConfigTransformerException {
+    protected static void writeFlowXmlFile(ConfigSchema configSchema, String path) throws IOException, ConfigTransformerException {
         try (OutputStream fileOut = Files.newOutputStream(Paths.get(path, "flow.xml.gz"))) {
             try (OutputStream outStream = new GZIPOutputStream(fileOut)) {
                 writeFlowXmlFile(configSchema, outStream);
@@ -178,8 +174,7 @@ public final class ConfigTransformer {
             ProvenanceRepositorySchema provenanceRepositorySchema = configSchema.getProvenanceRepositorySchema();
 
             OrderedProperties orderedProperties = new OrderedProperties();
-            orderedProperties.setProperty(NIFI_VERSION_KEY, NIFI_VERSION, "# Core Properties #" + System.lineSeparator());
-            orderedProperties.setProperty("nifi.flow.configuration.file", "./conf/flow.xml.gz");
+            orderedProperties.setProperty("nifi.flow.configuration.file", "./conf/flow.xml.gz", "# Core Properties #" + System.lineSeparator());
             orderedProperties.setProperty("nifi.flow.configuration.archive.enabled", "false");
             orderedProperties.setProperty("nifi.flow.configuration.archive.dir", "./conf/archive/");
             orderedProperties.setProperty("nifi.flowcontroller.autoResumeState", "true");
@@ -198,6 +193,7 @@ public final class ConfigTransformer {
             orderedProperties.setProperty("nifi.ui.autorefresh.interval", "30 sec");
             orderedProperties.setProperty("nifi.nar.library.directory", "./lib");
             orderedProperties.setProperty("nifi.nar.working.directory", "./work/nar/");
+            orderedProperties.setProperty("nifi.nar.library.autoload.directory", "./extensions");
             orderedProperties.setProperty("nifi.documentation.working.directory", "./work/docs/components");
 
             orderedProperties.setProperty("nifi.state.management.configuration.file", "./conf/state-management.xml", System.lineSeparator() +
@@ -258,7 +254,17 @@ public final class ConfigTransformer {
             orderedProperties.setProperty("nifi.web.jetty.threads", "200");
 
             final String sensitivePropertiesKey = sensitiveProperties.getKey();
-            final String notnullSensitivePropertiesKey = sensitivePropertiesKey != null ? sensitivePropertiesKey : "";
+            final String notnullSensitivePropertiesKey;
+            // Auto-generate the sensitive properties key if not provided, NiFi security libraries require it
+            if (StringUtil.isNullOrEmpty(sensitivePropertiesKey)) {
+                logger.warn("Generating Random Sensitive Properties Key [{}]", NiFiProperties.SENSITIVE_PROPS_KEY);
+                final SecureRandom secureRandom = new SecureRandom();
+                final byte[] sensitivePropertiesKeyBinary = new byte[SENSITIVE_PROPERTIES_KEY_LENGTH];
+                secureRandom.nextBytes(sensitivePropertiesKeyBinary);
+                notnullSensitivePropertiesKey = KEY_ENCODER.encodeToString(sensitivePropertiesKeyBinary);
+            } else {
+                notnullSensitivePropertiesKey = sensitivePropertiesKey;
+            }
             orderedProperties.setProperty("nifi.sensitive.props.key", notnullSensitivePropertiesKey, System.lineSeparator() + "# security properties #");
             orderedProperties.setProperty("nifi.sensitive.props.algorithm", sensitiveProperties.getAlgorithm());
 
@@ -294,14 +300,12 @@ public final class ConfigTransformer {
         }
     }
 
-    protected static DOMSource createFlowXml(ConfigSchema configSchema) throws IOException, ConfigurationChangeException, ConfigTransformerException {
+    protected static DOMSource createFlowXml(ConfigSchema configSchema) throws ConfigTransformerException {
         try {
             // create a new, empty document
-            final DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-            docFactory.setNamespaceAware(true);
-
-            final DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-            final Document doc = docBuilder.newDocument();
+            final StandardDocumentProvider documentProvider = new StandardDocumentProvider();
+            documentProvider.setNamespaceAware(true);
+            final Document doc = documentProvider.newDocument();
 
             // populate document with controller state
             final Element rootNode = doc.createElement("flowController");
@@ -352,7 +356,7 @@ public final class ConfigTransformer {
             }
 
             return new DOMSource(doc);
-        } catch (final ParserConfigurationException | DOMException | TransformerFactoryConfigurationError | IllegalArgumentException e) {
+        } catch (final ProcessingException | DOMException | IllegalArgumentException e) {
             throw new ConfigTransformerException(e);
         } catch (Exception e) {
             throw new ConfigTransformerException("Failed to parse the config YAML while writing the top level of the flow xml", e);
@@ -719,19 +723,19 @@ public final class ConfigTransformer {
 
     public static final String PROPERTIES_FILE_APACHE_2_0_LICENSE =
             " Licensed to the Apache Software Foundation (ASF) under one or more\n" +
-            "# contributor license agreements.  See the NOTICE file distributed with\n" +
-            "# this work for additional information regarding copyright ownership.\n" +
-            "# The ASF licenses this file to You under the Apache License, Version 2.0\n" +
-            "# (the \"License\"); you may not use this file except in compliance with\n" +
-            "# the License.  You may obtain a copy of the License at\n" +
-            "#\n" +
-            "#     http://www.apache.org/licenses/LICENSE-2.0\n" +
-            "#\n" +
-            "# Unless required by applicable law or agreed to in writing, software\n" +
-            "# distributed under the License is distributed on an \"AS IS\" BASIS,\n" +
-            "# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n" +
-            "# See the License for the specific language governing permissions and\n" +
-            "# limitations under the License.\n" +
-            "\n";
+                    "# contributor license agreements.  See the NOTICE file distributed with\n" +
+                    "# this work for additional information regarding copyright ownership.\n" +
+                    "# The ASF licenses this file to You under the Apache License, Version 2.0\n" +
+                    "# (the \"License\"); you may not use this file except in compliance with\n" +
+                    "# the License.  You may obtain a copy of the License at\n" +
+                    "#\n" +
+                    "#     http://www.apache.org/licenses/LICENSE-2.0\n" +
+                    "#\n" +
+                    "# Unless required by applicable law or agreed to in writing, software\n" +
+                    "# distributed under the License is distributed on an \"AS IS\" BASIS,\n" +
+                    "# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n" +
+                    "# See the License for the specific language governing permissions and\n" +
+                    "# limitations under the License.\n" +
+                    "\n";
 
 }

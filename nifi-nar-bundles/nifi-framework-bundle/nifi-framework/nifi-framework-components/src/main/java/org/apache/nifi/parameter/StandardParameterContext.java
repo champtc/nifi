@@ -16,6 +16,7 @@
  */
 package org.apache.nifi.parameter;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.authorization.AccessDeniedException;
 import org.apache.nifi.authorization.Authorizer;
 import org.apache.nifi.authorization.RequestAction;
@@ -545,7 +546,8 @@ public class StandardParameterContext implements ParameterContext {
             final Parameter proposedParameter = entry.getValue();
             if (currentEffectiveParameters.containsKey(proposedParameterDescriptor)) {
                 final Parameter currentParameter = currentEffectiveParameters.get(proposedParameterDescriptor);
-                if (!currentParameter.equals(proposedParameter) || currentParameter.getDescriptor().isSensitive() != proposedParameter.getDescriptor().isSensitive()) {
+                if (!currentParameter.equals(proposedParameter) || currentParameter.getDescriptor().isSensitive() != proposedParameter.getDescriptor().isSensitive()
+                        || !StringUtils.equals(currentParameter.getDescriptor().getDescription(), proposedParameter.getDescriptor().getDescription())) {
                     // The parameter has been updated in some way
                     effectiveParameterUpdates.put(proposedParameterDescriptor.getName(), proposedParameter);
                 }

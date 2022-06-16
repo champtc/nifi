@@ -23,6 +23,7 @@ import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.ConfigVerificationResult.Outcome;
 import org.apache.nifi.components.ConfigurableComponent;
 import org.apache.nifi.components.ValidationResult;
+import org.apache.nifi.components.validation.ValidationState;
 import org.apache.nifi.components.validation.ValidationStatus;
 import org.apache.nifi.components.validation.ValidationTrigger;
 import org.apache.nifi.controller.AbstractComponentNode;
@@ -171,10 +172,7 @@ public abstract class AbstractReportingTaskNode extends AbstractComponentNode im
 
     @Override
     public void reload(final Set<URL> additionalUrls) throws ReportingTaskInstantiationException {
-        if (isRunning()) {
-            throw new IllegalStateException("Cannot reload Reporting Task while Reporting Task is running");
-        }
-        String additionalResourcesFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls);
+        final String additionalResourcesFingerprint = ClassLoaderUtils.generateAdditionalUrlsFingerprint(additionalUrls, determineClasloaderIsolationKey());
         setAdditionalResourcesFingerprint(additionalResourcesFingerprint);
         getReloadComponent().reload(this, getCanonicalClassName(), getBundleCoordinate(), additionalUrls);
     }
@@ -261,12 +259,10 @@ public abstract class AbstractReportingTaskNode extends AbstractComponentNode im
             throw new IllegalStateException("Cannot start " + getReportingTask().getIdentifier() + " because it is currently disabled");
         }
 
-        if (isRunning()) {
-            throw new IllegalStateException("Cannot start " + getReportingTask().getIdentifier() + " because it is already running");
-        }
-
-        if (getValidationStatus() == ValidationStatus.INVALID) {
-            throw new IllegalStateException("Cannot start " + getReportingTask().getIdentifier() + " because it is in INVALID status");
+        final ValidationState validationState = getValidationState();
+        if (validationState.getStatus() == ValidationStatus.INVALID) {
+            throw new IllegalStateException("Cannot start " + getReportingTask().getIdentifier() +
+                " because it is invalid with the following validation errors: " + validationState.getValidationErrors());
         }
     }
 
@@ -363,8 +359,10 @@ public abstract class AbstractReportingTaskNode extends AbstractComponentNode im
                     final Bundle bundle = extensionManager.getBundle(getBundleCoordinate());
                     final Set<URL> classpathUrls = getAdditionalClasspathResources(context.getProperties().keySet(), descriptor -> context.getProperty(descriptor).getValue());
 
+                    final String classloaderIsolationKey = getClassLoaderIsolationKey(context);
                     final ClassLoader currentClassLoader = Thread.currentThread().getContextClassLoader();
-                    try (final InstanceClassLoader detectedClassLoader = extensionManager.createInstanceClassLoader(getComponentType(), getIdentifier(), bundle, classpathUrls, false)) {
+                    try (final InstanceClassLoader detectedClassLoader = extensionManager.createInstanceClassLoader(getComponentType(), getIdentifier(), bundle, classpathUrls, false,
+                                    classloaderIsolationKey)) {
                         Thread.currentThread().setContextClassLoader(detectedClassLoader);
                         results.addAll(verifiable.verify(context, logger));
                     } finally {

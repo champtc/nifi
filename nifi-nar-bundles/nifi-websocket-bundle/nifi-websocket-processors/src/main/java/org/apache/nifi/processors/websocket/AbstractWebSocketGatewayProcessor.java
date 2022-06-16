@@ -17,7 +17,7 @@
 
 package org.apache.nifi.processors.websocket;
 
-import org.apache.commons.lang3.StringUtils;
+import org.apache.nifi.util.StringUtils;
 import org.apache.nifi.annotation.behavior.TriggerSerially;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.flowfile.FlowFile;
@@ -128,9 +128,8 @@ public abstract class AbstractWebSocketGatewayProcessor extends AbstractSessionF
             if (context.hasIncomingConnection()) {
                 final ProcessSession session = processSessionFactory.createSession();
                 final FlowFile flowFile = session.get();
-                final Map<String, String> attributes = flowFile.getAttributes();
                 try {
-                    webSocketClientService.connect(endpointId, attributes);
+                    webSocketClientService.connect(endpointId, flowFile.getAttributes());
                 } finally {
                     session.remove(flowFile);
                     session.commitAsync();
@@ -195,7 +194,7 @@ public abstract class AbstractWebSocketGatewayProcessor extends AbstractSessionF
                 throw new ProcessException("Failed to register processor to WebSocket service due to: " + e, e);
             }
 
-        } else {
+        } else if (context.hasIncomingConnection()) {
             try {
                 onWebSocketServiceReady(webSocketService, context);
             } catch (IOException e) {

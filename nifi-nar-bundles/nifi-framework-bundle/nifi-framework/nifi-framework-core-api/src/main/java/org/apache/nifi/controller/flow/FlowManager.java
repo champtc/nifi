@@ -33,7 +33,6 @@ import org.apache.nifi.parameter.Parameter;
 import org.apache.nifi.parameter.ParameterContext;
 import org.apache.nifi.parameter.ParameterContextManager;
 import org.apache.nifi.web.api.dto.FlowSnippetDTO;
-import org.apache.nifi.web.api.entity.ParameterContextReferenceEntity;
 
 import java.net.URL;
 import java.util.Collection;
@@ -41,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 public interface FlowManager {
     String ROOT_GROUP_ID_ALIAS = "root";
@@ -181,6 +181,8 @@ public interface FlowManager {
 
     void onProcessorRemoved(ProcessorNode processor);
 
+    Set<ProcessorNode> findAllProcessors(Predicate<ProcessorNode> processorNode);
+
 
     /**
      * <p>
@@ -225,10 +227,13 @@ public interface FlowManager {
      * @param firstTimeAdded whether or not this is the first time this
      * Processor is added to the graph. If {@code true}, will invoke methods
      * annotated with the {@link org.apache.nifi.annotation.lifecycle.OnAdded} annotation.
+     * @param classloaderIsolationKey a classloader key that can be used in order to specify which shared class loader can be used as the instance class loader's parent, or <code>null</code> if the
+     * parent class loader should be shared or if cloning ancestors is not necessary
      * @return new processor node
      * @throws NullPointerException if either arg is null
      */
-    ProcessorNode createProcessor(String type, String id, BundleCoordinate coordinate, Set<URL> additionalUrls, boolean firstTimeAdded, boolean registerLogObserver);
+    ProcessorNode createProcessor(String type, String id, BundleCoordinate coordinate, Set<URL> additionalUrls, boolean firstTimeAdded, boolean registerLogObserver,
+                                  String classloaderIsolationKey);
 
 
 
@@ -299,7 +304,7 @@ public interface FlowManager {
 
     ReportingTaskNode createReportingTask(String type, String id, BundleCoordinate bundleCoordinate, boolean firstTimeAdded);
 
-    ReportingTaskNode createReportingTask(String type, String id, BundleCoordinate bundleCoordinate, Set<URL> additionalUrls, boolean firstTimeAdded, boolean register);
+    ReportingTaskNode createReportingTask(String type, String id, BundleCoordinate bundleCoordinate, Set<URL> additionalUrls, boolean firstTimeAdded, boolean register, String classloaderIsolationKey);
 
     ReportingTaskNode getReportingTaskNode(String taskId);
 
@@ -314,7 +319,7 @@ public interface FlowManager {
     ControllerServiceNode getControllerServiceNode(String id);
 
     ControllerServiceNode createControllerService(String type, String id, BundleCoordinate bundleCoordinate, Set<URL> additionalUrls, boolean firstTimeAdded,
-                                                         boolean registerLogObserver);
+                                                         boolean registerLogObserver, String classloaderIsolationKey);
 
 
     Set<ControllerServiceNode> getRootControllerServices();
@@ -336,12 +341,13 @@ public interface FlowManager {
      * @param id                The unique id
      * @param name              The ParameterContext name
      * @param parameters        The Parameters
-     * @param parameterContexts Optional inherited ParameterContexts
+     * @param inheritedContextIds The identifiers of any Parameter Contexts that the newly created Parameter Context should inherit from. The order of the identifiers in the List determines the
+     * order in which parameters with conflicting names are resolved. I.e., the Parameter Context whose ID comes first in the List is preferred.
      * @return The created ParameterContext
      * @throws IllegalStateException If <code>parameterContexts</code> is not empty and this method is called without being wrapped
      * by {@link FlowManager#withParameterContextResolution(Runnable)}
      */
-    ParameterContext createParameterContext(String id, String name, Map<String, Parameter> parameters, List<ParameterContextReferenceEntity> parameterContexts);
+    ParameterContext createParameterContext(String id, String name, Map<String, Parameter> parameters, List<String> inheritedContextIds);
 
     /**
      * Performs the given ParameterContext-related action, and then resolves all inherited ParameterContext references.

@@ -27,21 +27,22 @@ import org.apache.nifi.serialization.record.Record;
 import org.apache.nifi.serialization.record.RecordField;
 import org.apache.nifi.serialization.record.RecordFieldType;
 import org.apache.nifi.serialization.record.RecordSchema;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestJacksonCSVRecordReader {
     private final DataType doubleDataType = RecordFieldType.DOUBLE.getDataType();
@@ -69,7 +70,7 @@ public class TestJacksonCSVRecordReader {
         fields.add(new RecordField("name", RecordFieldType.STRING.getDataType()));
         final RecordSchema schema = new SimpleRecordSchema(fields);
 
-        try (final InputStream bais = new ByteArrayInputStream(text.getBytes());
+        try (final InputStream bais = new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
              final JacksonCSVRecordReader reader = new JacksonCSVRecordReader(bais, Mockito.mock(ComponentLog.class), schema, format, true, false,
                      RecordFieldType.DATE.getDefaultFormat(), RecordFieldType.TIME.getDefaultFormat(), RecordFieldType.TIMESTAMP.getDefaultFormat(), "UTF-8")) {
 
@@ -77,6 +78,30 @@ public class TestJacksonCSVRecordReader {
             final String name = (String)record.getValue("name");
 
             assertEquals("黃凱揚", name);
+        }
+    }
+
+    @Test
+    public void testISO8859() throws IOException, MalformedRecordException {
+        final String text = "name\nÄËÖÜ";
+        final byte[] bytesUTF = text.getBytes(StandardCharsets.UTF_8);
+        final byte[] bytes8859 = text.getBytes(StandardCharsets.ISO_8859_1);
+        assertEquals(13, bytesUTF.length, "expected size=13 for UTF-8 representation of test data");
+        assertEquals(9, bytes8859.length, "expected size=9 for ISO-8859-1 representation of test data");
+
+        final List<RecordField> fields = new ArrayList<>();
+        fields.add(new RecordField("name", RecordFieldType.STRING.getDataType()));
+        final RecordSchema schema = new SimpleRecordSchema(fields);
+
+        try (final InputStream bais = new ByteArrayInputStream(text.getBytes(StandardCharsets.ISO_8859_1));
+             final JacksonCSVRecordReader reader = new JacksonCSVRecordReader(bais, Mockito.mock(ComponentLog.class), schema, format, true, false,
+                     RecordFieldType.DATE.getDefaultFormat(), RecordFieldType.TIME.getDefaultFormat(), RecordFieldType.TIMESTAMP.getDefaultFormat(),
+                     StandardCharsets.ISO_8859_1.name())) {
+
+            final Record record = reader.nextRecord();
+            final String name = (String)record.getValue("name");
+
+            assertEquals("ÄËÖÜ", name);
         }
     }
 
@@ -111,7 +136,7 @@ public class TestJacksonCSVRecordReader {
 
             final Object[] record = reader.nextRecord().getValues();
             final Object[] expectedValues = new Object[] {"1", "John Doe", 4750.89D, "123 My Street", "My City", "MS", "11111", "USA"};
-            Assert.assertArrayEquals(expectedValues, record);
+            assertArrayEquals(expectedValues, record);
 
             assertNull(reader.nextRecord());
         }
@@ -134,7 +159,7 @@ public class TestJacksonCSVRecordReader {
 
             final Object[] record = reader.nextRecord().getValues();
             final Object[] expectedValues = new Object[] {"valueA", "valueB"};
-            Assert.assertArrayEquals(expectedValues, record);
+            assertArrayEquals(expectedValues, record);
 
             assertNull(reader.nextRecord());
         }
@@ -152,11 +177,11 @@ public class TestJacksonCSVRecordReader {
 
             final Object[] firstRecord = reader.nextRecord().getValues();
             final Object[] firstExpectedValues = new Object[] {"1", "John Doe", 4750.89D, "123 My Street", "My City", "MS", "11111", "USA"};
-            Assert.assertArrayEquals(firstExpectedValues, firstRecord);
+            assertArrayEquals(firstExpectedValues, firstRecord);
 
             final Object[] secondRecord = reader.nextRecord().getValues();
             final Object[] secondExpectedValues = new Object[] {"2", "Jane Doe", 4820.09D, "321 Your Street", "Your City", "NY", "33333", "USA"};
-            Assert.assertArrayEquals(secondExpectedValues, secondRecord);
+            assertArrayEquals(secondExpectedValues, secondRecord);
 
             assertNull(reader.nextRecord());
         }
@@ -174,11 +199,11 @@ public class TestJacksonCSVRecordReader {
 
             final Object[] firstRecord = reader.nextRecord().getValues();
             final Object[] firstExpectedValues = new Object[] {"1", "John Doe", 4750.89D, "123 My Street", "My City", "MS", "11111", "USA"};
-            Assert.assertArrayEquals(firstExpectedValues, firstRecord);
+            assertArrayEquals(firstExpectedValues, firstRecord);
 
             final Object[] secondRecord = reader.nextRecord().getValues();
             final Object[] secondExpectedValues = new Object[] {"2", "Jane Doe", 4820.09D, "321 Your Street", "Your City", "NY", "33333", "USA"};
-            Assert.assertArrayEquals(secondExpectedValues, secondRecord);
+            assertArrayEquals(secondExpectedValues, secondRecord);
 
             assertNull(reader.nextRecord());
         }
@@ -417,11 +442,11 @@ public class TestJacksonCSVRecordReader {
 
             final Object[] firstRecord = reader.nextRecord().getValues();
             final Object[] firstExpectedValues = new Object[] {"1", "John Doe", 4750.89D, "123 My Street", "My City", "MS", "11111", "USA"};
-            Assert.assertArrayEquals(firstExpectedValues, firstRecord);
+            assertArrayEquals(firstExpectedValues, firstRecord);
 
             final Object[] secondRecord = reader.nextRecord().getValues();
             final Object[] secondExpectedValues = new Object[] {"2", "Jane Doe", 4820.09D, "321 Your Street", "Your City", "NY", "33333", "USA"};
-            Assert.assertArrayEquals(secondExpectedValues, secondRecord);
+            assertArrayEquals(secondExpectedValues, secondRecord);
 
             assertNull(reader.nextRecord());
         }
@@ -457,11 +482,11 @@ public class TestJacksonCSVRecordReader {
 
             final Object[] firstRecord = reader.nextRecord().getValues();
             final Object[] firstExpectedValues = new Object[] {"1", "John Doe\\", 4750.89D, "123 My Street", "My City", "MS", "11111", "USA"};
-            Assert.assertArrayEquals(firstExpectedValues, firstRecord);
+            assertArrayEquals(firstExpectedValues, firstRecord);
 
             final Object[] secondRecord = reader.nextRecord().getValues();
             final Object[] secondExpectedValues = new Object[] {"2", "Jane Doe", 4820.09D, "321 Your Street", "Your City", "NY", "33333", "USA"};
-            Assert.assertArrayEquals(secondExpectedValues, secondRecord);
+            assertArrayEquals(secondExpectedValues, secondRecord);
 
             assertNull(reader.nextRecord());
         }
@@ -479,7 +504,7 @@ public class TestJacksonCSVRecordReader {
 
             final Object[] record = reader.nextRecord().getValues();
             final Object[] expectedValues = new Object[] {"1", "John Doe", 4750.89D, "123 My Street", "My City", "MS", "11111", "USA"};
-            Assert.assertArrayEquals(expectedValues, record);
+            assertArrayEquals(expectedValues, record);
 
             assertNull(reader.nextRecord());
         }

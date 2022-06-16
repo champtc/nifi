@@ -298,6 +298,7 @@
         <property name="dtoFactory" ref="dtoFactory"/>
         <property name="searchQueryParser" ref="searchQueryParser"/>
         <property name="controllerSearchService" ref="controllerSearchService"/>
+        <property name="runtimeManifestService" ref="runtimeManifestService" />
     </bean>
     <bean id="authorizableLookup" class="org.apache.nifi.authorization.StandardAuthorizableLookup">
         <property name="controllerFacade" ref="controllerFacade"/>

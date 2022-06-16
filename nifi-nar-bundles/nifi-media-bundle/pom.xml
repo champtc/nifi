@@ -19,12 +19,16 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.15.4-SNAPSHOT</version>
+        <version>1.16.4-SNAPSHOT</version>
     </parent>
 
     <artifactId>nifi-media-bundle</artifactId>
-    <version>1.15.4-SNAPSHOT</version>
+    <version>1.16.4-SNAPSHOT</version>
     <packaging>pom</packaging>
+
+    <properties>
+        <poi.version>5.2.2</poi.version>
+    </properties>
 
     <modules>
         <module>nifi-media-processors</module>
@@ -46,6 +50,25 @@
                 <artifactId>jsoup</artifactId>
                 <version>1.14.2</version>
             </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-scratchpad</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
+
+  <scm>
+    <tag>nifi-1.16.0-RC3</tag>
+  </scm>
 </project>

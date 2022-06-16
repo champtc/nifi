@@ -26,14 +26,13 @@ import org.apache.nifi.services.azure.storage.AzureStorageCredentialsService;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.apache.nifi.util.file.FileUtils;
-import org.junit.Before;
+
+import org.junit.jupiter.api.BeforeEach;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.util.Properties;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public abstract class AbstractAzureStorageIT {
 
@@ -43,31 +42,31 @@ public abstract class AbstractAzureStorageIT {
 
     static {
         CONFIG = new Properties();
-        try {
+        assertDoesNotThrow(() -> {
             final FileInputStream fis = new FileInputStream(CREDENTIALS_FILE);
-            try {
-                CONFIG.load(fis);
-            } catch (IOException e) {
-                fail("Could not open credentials file " + CREDENTIALS_FILE + ": " + e.getLocalizedMessage());
-            } finally {
-                FileUtils.closeQuietly(fis);
-            }
-        } catch (FileNotFoundException e) {
-            fail("Could not open credentials file " + CREDENTIALS_FILE + ": " + e.getLocalizedMessage());
-        }
+            assertDoesNotThrow(() -> CONFIG.load(fis));
+            FileUtils.closeQuietly(fis);
+        });
     }
 
-    protected static String getAccountName() {
+    protected String getAccountName() {
         return CONFIG.getProperty("accountName");
     }
 
-    protected static String getAccountKey() {
+    protected String getAccountKey() {
         return CONFIG.getProperty("accountKey");
     }
 
+    protected String getEndpointSuffix() {
+        String endpointSuffix = CONFIG.getProperty("endpointSuffix");
+        return endpointSuffix != null ? endpointSuffix : getDefaultEndpointSuffix();
+    }
+
+    protected abstract String getDefaultEndpointSuffix();
+
     protected TestRunner runner;
 
-    @Before
+    @BeforeEach
     public void setUpAzureStorageIT() throws Exception {
         runner = TestRunners.newTestRunner(getProcessorClass());
 

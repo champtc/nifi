@@ -30,7 +30,6 @@ import org.apache.kudu.client.OperationResponse;
 import org.apache.kudu.client.PartialRow;
 import org.apache.kudu.client.RowError;
 import org.apache.kudu.client.SessionConfiguration;
-import org.apache.kudu.shaded.com.google.common.annotations.VisibleForTesting;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyDescriptor.Builder;
@@ -143,11 +142,11 @@ public abstract class AbstractKuduProcessor extends AbstractProcessor {
             .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
             .build();
 
-    private static final int DEFAULT_WORKER_COUNT = 2 * Runtime.getRuntime().availableProcessors();
+    private static final int DEFAULT_WORKER_COUNT = Runtime.getRuntime().availableProcessors();
     static final PropertyDescriptor WORKER_COUNT = new Builder()
             .name("worker-count")
             .displayName("Kudu Client Worker Count")
-            .description("The maximum number of worker threads handling Kudu client read and write operations. Defaults to the number of available processors multiplied by 2.")
+            .description("The maximum number of worker threads handling Kudu client read and write operations. Defaults to the number of available processors.")
             .required(true)
             .defaultValue(Integer.toString(DEFAULT_WORKER_COUNT))
             .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR)
@@ -285,11 +284,12 @@ public abstract class AbstractKuduProcessor extends AbstractProcessor {
         return new KerberosKeytabUser(principal, keytab) {
             @Override
             public synchronized void login() {
-                if (!isLoggedIn()) {
-                    super.login();
-
-                    createKuduClient(context);
+                if (isLoggedIn()) {
+                    return;
                 }
+
+                super.login();
+                createKuduClient(context);
             }
         };
     }
@@ -298,11 +298,12 @@ public abstract class AbstractKuduProcessor extends AbstractProcessor {
         return new KerberosPasswordUser(principal, password) {
             @Override
             public synchronized void login() {
-                if (!isLoggedIn()) {
-                    super.login();
-
-                    createKuduClient(context);
+                if (isLoggedIn()) {
+                    return;
                 }
+
+                super.login();
+                createKuduClient(context);
             }
         };
     }
@@ -376,7 +377,6 @@ public abstract class AbstractKuduProcessor extends AbstractProcessor {
         }
     }
 
-    @VisibleForTesting
     protected void buildPartialRow(Schema schema, PartialRow row, Record record, List<String> fieldNames, boolean ignoreNull, boolean lowercaseFields) {
         for (String recordFieldName : fieldNames) {
             String colName = recordFieldName;

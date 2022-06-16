@@ -35,11 +35,13 @@ import org.apache.nifi.reporting.BulletinRepository;
 import org.apache.nifi.stateless.flow.DataflowDefinition;
 import org.apache.nifi.stateless.flow.StatelessDataflow;
 
-public interface StatelessEngine<T> {
+import java.time.Duration;
+
+public interface StatelessEngine {
 
     void initialize(StatelessEngineInitializationContext initializationContext);
 
-    StatelessDataflow createFlow(DataflowDefinition<T> dataflowDefinition);
+    StatelessDataflow createFlow(DataflowDefinition dataflowDefinition);
 
     ExtensionManager getExtensionManager();
 
@@ -70,4 +72,6 @@ public interface StatelessEngine<T> {
     FlowFileEventRepository getFlowFileEventRepository();
 
     CounterRepository getCounterRepository();
+
+    Duration getStatusTaskInterval();
 }

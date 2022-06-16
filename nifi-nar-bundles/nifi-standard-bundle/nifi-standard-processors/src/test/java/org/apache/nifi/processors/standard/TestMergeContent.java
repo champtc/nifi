@@ -47,7 +47,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
@@ -485,7 +484,7 @@ public class TestMergeContent {
         runner.setProperty(MergeContent.MERGE_FORMAT, MergeContent.MERGE_FORMAT_CONCAT);
 
         createFlowFiles(runner);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -501,14 +500,14 @@ public class TestMergeContent {
     }
 
     @Test
-    public void testSimpleBinaryConcatSingleBin() throws IOException, InterruptedException {
+    public void testSimpleBinaryConcatSingleBin() {
         final TestRunner runner = TestRunners.newTestRunner(new MergeContent());
         runner.setProperty(MergeContent.MAX_BIN_AGE, "1 sec");
         runner.setProperty(MergeContent.MERGE_FORMAT, MergeContent.MERGE_FORMAT_CONCAT);
         runner.setProperty(MergeContent.MAX_BIN_COUNT, "1");
 
         createFlowFiles(runner);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -516,7 +515,7 @@ public class TestMergeContent {
         runner.assertTransferCount(MergeContent.REL_ORIGINAL, 3);
 
         final MockFlowFile bundle = runner.getFlowFilesForRelationship(MergeContent.REL_MERGED).get(0);
-        bundle.assertContentEquals("Hello, World!".getBytes("UTF-8"));
+        bundle.assertContentEquals("Hello, World!");
         bundle.assertAttributeEquals(CoreAttributes.MIME_TYPE.key(), "application/plain-text");
     }
 
@@ -531,7 +530,7 @@ public class TestMergeContent {
         runner.setProperty(MergeContent.FOOTER, "$");
 
         createFlowFiles(runner);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -544,7 +543,7 @@ public class TestMergeContent {
     }
 
     @Test
-    public void testSimpleBinaryConcatWithTextDelimitersHeaderOnly() throws IOException, InterruptedException {
+    public void testSimpleBinaryConcatWithTextDelimitersHeaderOnly() throws IOException {
         final TestRunner runner = TestRunners.newTestRunner(new MergeContent());
         runner.setProperty(MergeContent.MAX_BIN_AGE, "1 sec");
         runner.setProperty(MergeContent.MERGE_FORMAT, MergeContent.MERGE_FORMAT_CONCAT);
@@ -552,7 +551,7 @@ public class TestMergeContent {
         runner.setProperty(MergeContent.HEADER, "@");
 
         createFlowFiles(runner);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -584,7 +583,7 @@ public class TestMergeContent {
         runner.enqueue("Hello".getBytes("UTF-8"), attributes);
         runner.enqueue(", ".getBytes("UTF-8"), attributes);
         runner.enqueue("World!".getBytes("UTF-8"), attributes);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -654,7 +653,7 @@ public class TestMergeContent {
         final Map<String, String> attributes = new HashMap<>();
         attributes.put(CoreAttributes.MIME_TYPE.key(), "application/zip");
         runner.enqueue(new byte[0], attributes);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -667,7 +666,7 @@ public class TestMergeContent {
     }
 
     @Test
-    public void testOldestBinIsExpired() throws IOException, InterruptedException {
+    public void testOldestBinIsExpired() {
         final TestRunner runner = TestRunners.newTestRunner(new MergeContent());
         runner.setProperty(MergeContent.MAX_BIN_AGE, "1 day");
         runner.setProperty(MergeContent.MAX_BIN_COUNT, "50");
@@ -705,6 +704,11 @@ public class TestMergeContent {
         // will be in a separate bin.
         runner.run(1, false, true);
         runner.enqueue(new byte[0], attrs);
+
+        // Add one more FlowFile, with a unique correlation id so that it creates the 51st bin.
+        // This should trigger the oldest bin to be evicted.
+        attrs.put("correlationId", "abc");
+        runner.enqueue(new byte[0], attrs);
         runner.run();
 
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -733,7 +737,7 @@ public class TestMergeContent {
         runner.setProperty(MergeContent.MERGE_FORMAT, MergeContent.MERGE_FORMAT_ZIP);
 
         createFlowFiles(runner);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -770,7 +774,7 @@ public class TestMergeContent {
         runner.enqueue("Hello".getBytes("UTF-8"), attributes);
         runner.enqueue(", ".getBytes("UTF-8"), attributes);
         runner.enqueue("World!".getBytes("UTF-8"), attributes);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -793,7 +797,7 @@ public class TestMergeContent {
         runner.enqueue(", ".getBytes("UTF-8"), attributes);
         attributes.put(CoreAttributes.FILENAME.key(), "AReallyLongggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggFileName");
         runner.enqueue("World!".getBytes("UTF-8"), attributes);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -1108,7 +1112,7 @@ public class TestMergeContent {
         attributes.put("attr", "b");
         runner.enqueue("Panama".getBytes("UTF-8"), attributes);
 
-        runner.run(1);
+        runner.run(2);
 
         runner.assertTransferCount(MergeContent.REL_MERGED, 2);
 
@@ -1231,7 +1235,7 @@ public class TestMergeContent {
         runner.setProperty(MergeContent.MERGE_FORMAT, MergeContent.MERGE_FORMAT_CONCAT);
 
         createFlowFiles(runner);
-        runner.run();
+        runner.run(2);
 
         runner.assertQueueEmpty();
         runner.assertTransferCount(MergeContent.REL_MERGED, 1);
@@ -1262,15 +1266,15 @@ public class TestMergeContent {
         assertEquals(2, runner.getQueueSize().getObjectCount());
     }
 
-    private void createFlowFiles(final TestRunner testRunner) throws UnsupportedEncodingException {
+    private void createFlowFiles(final TestRunner testRunner) {
         final Map<String, String> attributes = new HashMap<>();
         attributes.put(CoreAttributes.MIME_TYPE.key(), "application/plain-text");
         // add 'fragment.index' attribute to ensure non-defragment mode operates correctly even when index is present
         attributes.put(MergeContent.FRAGMENT_INDEX_ATTRIBUTE, "1");
 
-        testRunner.enqueue("Hello".getBytes("UTF-8"), attributes);
-        testRunner.enqueue(", ".getBytes("UTF-8"), attributes);
-        testRunner.enqueue("World!".getBytes("UTF-8"), attributes);
+        testRunner.enqueue("Hello", attributes);
+        testRunner.enqueue(", ", attributes);
+        testRunner.enqueue("World!", attributes);
     }
 
 }

@@ -613,11 +613,12 @@ public class NodeClusterCoordinator implements ClusterCoordinator, ProtocolHandl
 
     @Override
     public void removeNode(final NodeIdentifier nodeId, final String userDn) {
+        // Remove the node from the cluster state before any notifications are sent to the cluster participants.  This
+        // ensures that potential communication failures do not cause the operation to fail.
+        removeNode(nodeId);
+        storeState();
         reportEvent(nodeId, Severity.INFO, "User " + userDn + " requested that node be removed from cluster");
         notifyOthersOfNodeStatusChange(new NodeConnectionStatus(nodeId, NodeConnectionState.REMOVED));
-        removeNode(nodeId);
-
-        storeState();
     }
 
     private void onNodeRemoved(final NodeIdentifier nodeId) {
@@ -950,6 +951,7 @@ public class NodeClusterCoordinator implements ClusterCoordinator, ProtocolHandl
                     try {
                         senderListener.offload(request);
                         reportEvent(nodeId, Severity.INFO, "Node was offloaded due to " + request.getExplanation());
+
                         future.complete(null);
                         return;
                     } catch (final Exception e) {
@@ -964,6 +966,10 @@ public class NodeClusterCoordinator implements ClusterCoordinator, ProtocolHandl
                         }
                     }
                 }
+
+                updateNodeStatus(new NodeConnectionStatus(nodeId, NodeConnectionState.DISCONNECTED, null,
+                    "Attempted to offload node but failed to notify node that it was to offload its data. State reset to disconnected."));
+                addNodeEvent(nodeId, "Failed to initiate node offload: " + lastException);
 
                 future.completeExceptionally(lastException);
             }
