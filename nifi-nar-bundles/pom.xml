@@ -132,7 +132,7 @@
                     <doUpdate>false</doUpdate>
                     <shortRevisionLength>7</shortRevisionLength>
                     <getRevisionOnlyOnce>true</getRevisionOnlyOnce>
-                    <revisionOnScmFailure />
+                    <revisionOnScmFailure/>
                     <buildNumberPropertyName>buildRevision</buildNumberPropertyName>
                     <scmBranchPropertyName>buildBranch</scmBranchPropertyName>
                 </configuration>
@@ -151,8 +151,8 @@
                 </file>
             </activation>
             <properties>
-                <buildRevision />
-                <buildBranch />
+                <buildRevision/>
+                <buildBranch/>
             </properties>
         </profile>
         <profile>
@@ -312,7 +312,7 @@
             <dependency>
                 <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-api</artifactId>
-                <version>1.17.0-SNAPSHOT</version>
+                <version>1.17.0</version>
                 <scope>provided</scope>
             </dependency>
             <dependency>
