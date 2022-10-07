@@ -27,7 +27,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-kafka-connector-assembly</artifactId>
-            <version>1.17.0-SNAPSHOT</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
@@ -48,7 +48,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-standard-nar</artifactId>
-            <version>1.17.0-SNAPSHOT</version>
+            <version>1.18.0</version>
             <type>nar</type>
         </dependency>
         <dependency>
