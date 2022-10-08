@@ -46,12 +46,12 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-framework-components</artifactId>
-            <version>1.17.0-SNAPSHOT</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-expression-language</artifactId>
-            <version>1.17.0-SNAPSHOT</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
@@ -107,7 +107,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-site-to-site-client</artifactId>
-            <version>1.17.0-SNAPSHOT</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
