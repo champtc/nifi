@@ -72,6 +72,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String NAR_LIBRARY_DIRECTORY_PREFIX = "nifi.nar.library.directory.";
     public static final String NAR_LIBRARY_AUTOLOAD_DIRECTORY = "nifi.nar.library.autoload.directory";
     public static final String NAR_WORKING_DIRECTORY = "nifi.nar.working.directory";
+    public static final String UNPACK_NARS_TO_UBER_JAR = "nifi.nar.unpack.uber.jar";
     public static final String COMPONENT_DOCS_DIRECTORY = "nifi.documentation.working.directory";
     public static final String SENSITIVE_PROPS_KEY = "nifi.sensitive.props.key";
     public static final String SENSITIVE_PROPS_ALGORITHM = "nifi.sensitive.props.algorithm";
@@ -225,6 +226,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final String WEB_HTTPS_PORT = "nifi.web.https.port";
     public static final String WEB_HTTPS_PORT_FORWARDING = "nifi.web.https.port.forwarding";
     public static final String WEB_HTTPS_HOST = "nifi.web.https.host";
+    public static final String WEB_HTTPS_APPLICATION_PROTOCOLS = "nifi.web.https.application.protocols";
     public static final String WEB_HTTPS_CIPHERSUITES_INCLUDE = "nifi.web.https.ciphersuites.include";
     public static final String WEB_HTTPS_CIPHERSUITES_EXCLUDE = "nifi.web.https.ciphersuites.exclude";
     public static final String WEB_HTTPS_NETWORK_INTERFACE_PREFIX = "nifi.web.https.network.interface.";
@@ -328,12 +330,19 @@ public class NiFiProperties extends ApplicationProperties {
     public static final int DEFAULT_DIAGNOSTICS_ON_SHUTDOWN_MAX_FILE_COUNT = 10;
     public static final String DEFAULT_DIAGNOSTICS_ON_SHUTDOWN_MAX_DIRECTORY_SIZE = "10 MB";
 
+    // performance tracking
+    public static final String TRACK_PERFORMANCE_PERCENTAGE = "nifi.performance.tracking.percentage";
+
+    // performance tracking defaults
+    public static final int DEFAULT_TRACK_PERFORMANCE_PERCENTAGE = 0;
+
     // defaults
     public static final Boolean DEFAULT_AUTO_RESUME_STATE = true;
     public static final String DEFAULT_AUTHORIZER_CONFIGURATION_FILE = "conf/authorizers.xml";
     public static final String DEFAULT_LOGIN_IDENTITY_PROVIDER_CONFIGURATION_FILE = "conf/login-identity-providers.xml";
     public static final Integer DEFAULT_REMOTE_INPUT_PORT = null;
     public static final Path DEFAULT_TEMPLATE_DIRECTORY = Paths.get("conf", "templates");
+    private static final String DEFAULT_WEB_HTTPS_APPLICATION_PROTOCOLS = "http/1.1";
     public static final int DEFAULT_WEB_THREADS = 200;
     public static final String DEFAULT_WEB_MAX_HEADER_SIZE = "16 KB";
     public static final String DEFAULT_WEB_WORKING_DIR = "./work/jetty";
@@ -342,6 +351,7 @@ public class NiFiProperties extends ApplicationProperties {
     public static final int DEFAULT_WEB_MAX_ACCESS_TOKEN_REQUESTS_PER_SECOND = 25;
     public static final String DEFAULT_WEB_REQUEST_TIMEOUT = "60 secs";
     public static final String DEFAULT_NAR_WORKING_DIR = "./work/nar";
+    public static final boolean DEFAULT_UNPACK_NARS_TO_UBER_JAR = false;
     public static final String DEFAULT_COMPONENT_DOCS_DIRECTORY = "./work/docs/components";
     public static final String DEFAULT_NAR_LIBRARY_DIR = "./lib";
     public static final String DEFAULT_NAR_LIBRARY_AUTOLOAD_DIR = "./extensions";
@@ -506,10 +516,10 @@ public class NiFiProperties extends ApplicationProperties {
         try {
             return Integer.parseInt(value.trim());
         } catch (final Exception e) {
+            logger.warn("Configured value for property {} in nifi.properties is invalid, falling back to default value", propertyName, e);
             return defaultValue;
         }
     }
-
 
     public String getAdministrativeYieldDuration() {
         return getProperty(ADMINISTRATIVE_YIELD_DURATION, DEFAULT_ADMINISTRATIVE_YIELD_DURATION);
@@ -686,6 +696,15 @@ public class NiFiProperties extends ApplicationProperties {
         return sslPort;
     }
 
+    /**
+     * Is HTTP without TLS enabled based on configuring nifi.web.http.port property
+     *
+     * @return HTTP enabled status
+     */
+    public boolean isHttpEnabled() {
+        return getPort() != null;
+    }
+
     public boolean isHTTPSConfigured() {
         return getSslPort() != null;
     }
@@ -703,6 +722,16 @@ public class NiFiProperties extends ApplicationProperties {
         } else {
             throw new RuntimeException("The HTTP or HTTPS port must be configured");
         }
+    }
+
+    /**
+     * Get Web HTTPS Application Protocols defaults to HTTP/1.1
+     *
+     * @return Set of configured HTTPS Application Protocols
+     */
+    public Set<String> getWebHttpsApplicationProtocols() {
+        final String protocols = getProperty(WEB_HTTPS_APPLICATION_PROTOCOLS, DEFAULT_WEB_HTTPS_APPLICATION_PROTOCOLS);
+        return Arrays.stream(protocols.split("\\s+")).collect(Collectors.toSet());
     }
 
     public String getWebMaxHeaderSize() {
@@ -754,6 +783,14 @@ public class NiFiProperties extends ApplicationProperties {
 
     public File getNarWorkingDirectory() {
         return new File(getProperty(NAR_WORKING_DIRECTORY, DEFAULT_NAR_WORKING_DIR));
+    }
+
+    public boolean isUnpackNarsToUberJar() {
+        final String propertyValue = getProperty(UNPACK_NARS_TO_UBER_JAR);
+        if (propertyValue == null) {
+            return DEFAULT_UNPACK_NARS_TO_UBER_JAR;
+        }
+        return Boolean.parseBoolean(propertyValue);
     }
 
     public File getFrameworkWorkingDirectory() {
@@ -1539,6 +1576,18 @@ public class NiFiProperties extends ApplicationProperties {
 
     public String getClusterStateProviderId() {
         return getProperty(STATE_MANAGEMENT_CLUSTER_PROVIDER_ID);
+    }
+
+    public int getPerformanceMetricTrackingPercentage() {
+        final int percentage = getIntegerProperty(TRACK_PERFORMANCE_PERCENTAGE, DEFAULT_TRACK_PERFORMANCE_PERCENTAGE);
+        if (percentage < 0) {
+            return 0;
+        }
+        if (percentage > 100) {
+            return 100;
+        }
+
+        return percentage;
     }
 
     public File getEmbeddedZooKeeperPropertiesFile() {

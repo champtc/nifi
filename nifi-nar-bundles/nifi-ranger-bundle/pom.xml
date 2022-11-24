@@ -19,23 +19,21 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
 
-    <groupId>org.apache.nifi</groupId>
     <artifactId>nifi-ranger-bundle</artifactId>
-    <version>1.16.3</version>
     <packaging>pom</packaging>
-
-    <properties>
-        <zookeeper.version>3.5.9</zookeeper.version>
-    </properties>
 
     <modules>
         <module>nifi-ranger-plugin</module>
         <module>nifi-ranger-nar</module>
 	    <module>nifi-ranger-resources</module>
     </modules>
+
+    <properties>
+        <ranger.hadoop.version>3.3.3</ranger.hadoop.version>
+    </properties>
 
     <dependencyManagement>
         <dependencies>
@@ -44,18 +42,6 @@
                 <groupId>org.apache.zookeeper</groupId>
                 <artifactId>zookeeper</artifactId>
                 <version>${zookeeper.version}</version>
-            </dependency>
-            <!-- Override commons-io:2.5 from ranger -->
-            <dependency>
-                <groupId>commons-io</groupId>
-                <artifactId>commons-io</artifactId>
-                <version>2.10.0</version>
-            </dependency>
-            <!-- Override snakeyaml:1.17 from ranger -->
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>1.29</version>
             </dependency>
             <!-- Override commons-compress -->
             <dependency>
@@ -69,10 +55,12 @@
                 <artifactId>commons-beanutils</artifactId>
                 <version>1.9.4</version>
             </dependency>
+            <!-- Override Hadoop -->
+            <dependency>
+                <groupId>org.apache.hadoop</groupId>
+                <artifactId>hadoop-common</artifactId>
+                <version>${ranger.hadoop.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

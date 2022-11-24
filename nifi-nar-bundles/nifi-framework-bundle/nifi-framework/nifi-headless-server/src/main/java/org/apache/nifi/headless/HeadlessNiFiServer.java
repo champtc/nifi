@@ -28,6 +28,7 @@ import org.apache.nifi.authorization.exception.AuthorizationAccessException;
 import org.apache.nifi.authorization.exception.AuthorizerCreationException;
 import org.apache.nifi.authorization.exception.AuthorizerDestructionException;
 import org.apache.nifi.bundle.Bundle;
+import org.apache.nifi.c2.client.api.C2Client;
 import org.apache.nifi.controller.DecommissionTask;
 import org.apache.nifi.controller.FlowController;
 import org.apache.nifi.controller.FlowSerializationStrategy;
@@ -51,10 +52,10 @@ import org.apache.nifi.nar.ExtensionMapping;
 import org.apache.nifi.nar.NarAutoLoader;
 import org.apache.nifi.nar.NarClassLoadersHolder;
 import org.apache.nifi.nar.NarLoader;
+import org.apache.nifi.nar.NarUnpackMode;
 import org.apache.nifi.nar.StandardExtensionDiscoveringManager;
 import org.apache.nifi.nar.StandardNarLoader;
 import org.apache.nifi.registry.VariableRegistry;
-import org.apache.nifi.registry.flow.StandardFlowRegistryClient;
 import org.apache.nifi.registry.variable.FileBasedVariableRegistry;
 import org.apache.nifi.reporting.BulletinRepository;
 import org.apache.nifi.services.FlowService;
@@ -131,8 +132,6 @@ public class HeadlessNiFiServer implements NiFiServer {
             PropertyEncryptor encryptor = PropertyEncryptorFactory.getPropertyEncryptor(props);
             VariableRegistry variableRegistry = new FileBasedVariableRegistry(props.getVariableRegistryPropertiesPaths());
             BulletinRepository bulletinRepository = new VolatileBulletinRepository();
-            StandardFlowRegistryClient flowRegistryClient = new StandardFlowRegistryClient();
-            flowRegistryClient.setProperties(props);
 
             final StatusHistoryRepositoryFactoryBean statusHistoryRepositoryFactoryBean = new StatusHistoryRepositoryFactoryBean();
             statusHistoryRepositoryFactoryBean.setNifiProperties(props);
@@ -147,14 +146,12 @@ public class HeadlessNiFiServer implements NiFiServer {
                     encryptor,
                     bulletinRepository,
                     variableRegistry,
-                    flowRegistryClient,
                     extensionManager,
                     statusHistoryRepository);
 
             flowService = StandardFlowService.createStandaloneInstance(
                     flowController,
                     props,
-                    encryptor,
                     null, // revision manager
                     authorizer,
                     FlowSerializationStrategy.WRITE_XML_ONLY);
@@ -170,17 +167,20 @@ public class HeadlessNiFiServer implements NiFiServer {
             FlowManager flowManager = flowController.getFlowManager();
             flowManager.getGroup(flowManager.getRootGroupId()).startProcessing();
 
+            final NarUnpackMode unpackMode = props.isUnpackNarsToUberJar() ? NarUnpackMode.UNPACK_TO_UBER_JAR : NarUnpackMode.UNPACK_INDIVIDUAL_JARS;
             final NarLoader narLoader = new StandardNarLoader(
                     props.getExtensionsWorkingDirectory(),
                     props.getComponentDocumentationWorkingDirectory(),
                     NarClassLoadersHolder.getInstance(),
                     extensionManager,
                     new ExtensionMapping(), // Mapping is for documentation which is for the UI, not headless
-                    null); // UI Loader is for documentation which is for the UI, not headless
+                    null,
+                    unpackMode); // UI Loader is for documentation which is for the UI, not headless
 
-            narAutoLoader = new NarAutoLoader(props, narLoader, extensionManager);
+            narAutoLoader = new NarAutoLoader(props, narLoader);
             narAutoLoader.start();
             logger.info("Flow loaded successfully.");
+
         } catch (Exception e) {
             // ensure the flow service is terminated
             if (flowService != null && flowService.isRunning()) {
@@ -224,6 +224,10 @@ public class HeadlessNiFiServer implements NiFiServer {
 
     @Override
     public StatusHistoryDumpFactory getStatusHistoryDumpFactory() {
+        return null;
+    }
+
+    protected C2Client getC2Client() {
         return null;
     }
 

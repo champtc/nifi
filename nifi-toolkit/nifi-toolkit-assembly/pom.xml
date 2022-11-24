@@ -14,7 +14,7 @@ language governing permissions and limitations under the License. -->
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-toolkit</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <artifactId>nifi-toolkit-assembly</artifactId>
     <packaging>pom</packaging>
@@ -55,6 +55,7 @@ language governing permissions and limitations under the License. -->
                                 <descriptor>src/main/assembly/dependencies.xml</descriptor>
                             </descriptors>
                             <tarLongFileMode>posix</tarLongFileMode>
+                            <formats>zip</formats>
                         </configuration>
                     </execution>
                 </executions>
@@ -65,37 +66,37 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-toolkit-tls</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-toolkit-encrypt-config</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-toolkit-s2s</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-toolkit-admin</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-toolkit-zookeeper-migrator</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
           <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-toolkit-flowanalyzer</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-toolkit-cli</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -396,9 +397,78 @@ language governing permissions and limitations under the License. -->
                 </plugins>
             </build>
         </profile>
+        <profile>
+            <id>targz</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <build>
+            <plugins>
+                <plugin>
+                    <artifactId>maven-assembly-plugin</artifactId>
+                    <configuration>
+                        <finalName>nifi-toolkit-${project.version}</finalName>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>make shared resource</id>
+                            <goals>
+                                <goal>single</goal>
+                            </goals>
+                            <phase>package</phase>
+                            <configuration>
+                                <archiverConfig>
+                                    <defaultDirectoryMode>0755</defaultDirectoryMode>
+                                    <directoryMode>0755</directoryMode>
+                                    <fileMode>0644</fileMode>
+                                </archiverConfig>
+                                <descriptors>
+                                    <descriptor>src/main/assembly/dependencies.xml</descriptor>
+                                </descriptors>
+                                <tarLongFileMode>posix</tarLongFileMode>
+                                <formats>tar.gz</formats>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>dir-only</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <configuration>
+                            <finalName>nifi-toolkit-${project.version}</finalName>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>make shared resource</id>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <phase>package</phase>
+                                <configuration>
+                                    <archiverConfig>
+                                        <defaultDirectoryMode>0755</defaultDirectoryMode>
+                                        <directoryMode>0755</directoryMode>
+                                        <fileMode>0644</fileMode>
+                                    </archiverConfig>
+                                    <descriptors>
+                                        <descriptor>src/main/assembly/dependencies.xml</descriptor>
+                                    </descriptors>
+                                    <formats>dir</formats>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

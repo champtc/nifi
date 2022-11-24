@@ -20,7 +20,7 @@ limitations under the License.
     <parent>
         <artifactId>minifi-c2-provider</artifactId>
         <groupId>org.apache.nifi.minifi</groupId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <artifactId>minifi-c2-provider-nifi-rest</artifactId>
     <packaging>jar</packaging>
@@ -53,6 +53,10 @@ limitations under the License.
                     <groupId>org.slf4j</groupId>
                     <artifactId>slf4j-log4j12</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.glassfish.jersey.media</groupId>
+                    <artifactId>jersey-media-json-jackson</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
@@ -78,8 +82,4 @@ limitations under the License.
             </plugin>
         </plugins>
     </build>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

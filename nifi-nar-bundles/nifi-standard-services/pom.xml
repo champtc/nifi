@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <artifactId>nifi-standard-services</artifactId>
     <packaging>pom</packaging>
@@ -54,9 +54,6 @@
         <module>nifi-hadoop-dbcp-service-bundle</module>
         <module>nifi-kerberos-user-service-api</module>
         <module>nifi-kerberos-user-service-bundle</module>
+        <module>nifi-web-client-provider-bundle</module>
     </modules>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

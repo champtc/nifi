@@ -18,15 +18,12 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-standard-services</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
-    <groupId>org.apache.nifi</groupId>
     <artifactId>nifi-hbase_1_1_2-client-service-bundle</artifactId>
-    <version>1.16.3</version>
     <packaging>pom</packaging>
     <properties>
         <hadoop.version>2.7.3</hadoop.version>
-        <zookeeper.version>3.5.9</zookeeper.version>
     </properties>
     <modules>
         <module>nifi-hbase_1_1_2-client-service</module>
@@ -88,12 +85,6 @@
                 <artifactId>netty</artifactId>
                 <version>${netty.3.version}</version>
             </dependency>
-            <!-- Override commons-io:2.4 from hbase-client -->
-            <dependency>
-                <groupId>commons-io</groupId>
-                <artifactId>commons-io</artifactId>
-                <version>2.10.0</version>
-            </dependency>
             <!-- Override commons-compress -->
             <dependency>
                 <groupId>org.apache.commons</groupId>
@@ -114,8 +105,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

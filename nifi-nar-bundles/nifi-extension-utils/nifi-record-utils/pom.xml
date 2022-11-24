@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-extension-utils</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <packaging>pom</packaging>
     <artifactId>nifi-record-utils</artifactId>
@@ -26,8 +26,9 @@
     <modules>
         <module>nifi-avro-record-utils</module>
         <module>nifi-standard-record-utils</module>
-	    <module>nifi-hadoop-record-utils</module>
-	    <module>nifi-mock-record-utils</module>
+	      <module>nifi-hadoop-record-utils</module>
+        <module>nifi-json-record-utils</module>
+	      <module>nifi-mock-record-utils</module>
     </modules>
 
     <dependencyManagement>
@@ -45,8 +46,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

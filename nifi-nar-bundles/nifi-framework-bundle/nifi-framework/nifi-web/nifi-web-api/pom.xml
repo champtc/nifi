@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-web</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <groupId>org.apache.nifi</groupId>
     <artifactId>nifi-web-api</artifactId>
@@ -207,7 +207,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-web-security</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
@@ -264,7 +264,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-prometheus-utils</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>javax.servlet</groupId>
@@ -343,7 +343,7 @@
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.ext</groupId>
-            <artifactId>jersey-spring4</artifactId>
+            <artifactId>jersey-spring5</artifactId>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -422,27 +422,9 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.apache.httpcomponents</groupId>
-            <artifactId>httpclient</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>commons-logging</groupId>
-                    <artifactId>commons-logging</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>jcl-over-slf4j</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-mock</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

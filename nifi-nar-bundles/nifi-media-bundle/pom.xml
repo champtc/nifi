@@ -19,11 +19,10 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
 
     <artifactId>nifi-media-bundle</artifactId>
-    <version>1.16.3</version>
     <packaging>pom</packaging>
 
     <properties>
@@ -48,7 +47,6 @@
             <dependency>
                 <groupId>org.jsoup</groupId>
                 <artifactId>jsoup</artifactId>
-                <version>1.14.2</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.poi</groupId>
@@ -67,8 +65,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

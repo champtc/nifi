@@ -218,7 +218,7 @@ public class WriteJsonResult extends AbstractRecordSetWriter implements RecordSe
 
             endTask.apply(generator);
         } catch (final Exception e) {
-            logger.error("Failed to write {} with schema {} as a JSON Object due to {}", new Object[] {record, record.getSchema(), e.toString(), e});
+            logger.error("Failed to write {} with reader schema {} and writer schema {} as a JSON Object due to {}", record, record.getSchema(), writeSchema, e.toString(), e);
             throw e;
         }
     }
@@ -374,6 +374,7 @@ public class WriteJsonResult extends AbstractRecordSetWriter implements RecordSe
             case SHORT:
                 generator.writeNumber(DataTypeUtils.toInteger(coercedValue, fieldName));
                 break;
+            case UUID:
             case CHAR:
             case STRING:
                 generator.writeString(coercedValue.toString());

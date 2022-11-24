@@ -19,15 +19,14 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
 
     <artifactId>nifi-redis-bundle</artifactId>
-    <version>1.16.3</version>
     <packaging>pom</packaging>
 
     <properties>
-        <spring.data.redis.version>2.6.2</spring.data.redis.version>
+        <spring.data.redis.version>2.7.2</spring.data.redis.version>
         <jedis.version>3.8.0</jedis.version>
     </properties>
 
@@ -37,8 +36,4 @@
         <module>nifi-redis-extensions</module>
         <module>nifi-redis-nar</module>
     </modules>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

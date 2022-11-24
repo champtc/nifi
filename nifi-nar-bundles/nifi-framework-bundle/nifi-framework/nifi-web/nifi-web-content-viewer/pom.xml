@@ -17,9 +17,8 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-web</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
-    <groupId>org.apache.nifi</groupId>
     <artifactId>nifi-web-content-viewer</artifactId>
     <packaging>war</packaging>
     <properties>
@@ -103,8 +102,4 @@
             </plugin>
         </plugins>
     </build>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

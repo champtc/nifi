@@ -182,6 +182,49 @@ Antivirus software can take a long time to scan large directories and the numero
 * `provenance_repository`
 * `state`
 
+[[logging_configuration]]
+== Logging Configuration
+NiFi uses link:https://logback.qos.ch/[logback^] as the runtime logging implementation. The `conf` directory contains a
+standard `logback.xml` configuration with default appender and level settings. The
+link:https://logback.qos.ch/manual/index.html[logback manual] provides a complete reference of available options.
+
+=== Standard Log Files
+The standard logback configuration includes the following appender definitions and associated log files:
+
+[options="header"]
+|=========================
+| File                   | Description
+| `nifi-app.log`         | Application log containing framework and component messages
+| `nifi-bootstrap.log`   | Bootstrap log containing startup and shutdown messages
+| `nifi-deprecation.log` | Deprecation log containing warnings for deprecated components and features
+| `nifi-request.log`     | HTTP request log containing user interface and REST API access messages
+| `nifi-user.log`        | User log containing authentication and authorization messages
+|=========================
+
+=== Deprecation Logging
+The `nifi-deprecation.log` contains warning messages describing components and features that will be removed in
+subsequent versions. Deprecation warnings should be evaluated and addressed to avoid breaking changes when upgrading to
+a new major version. Resolving deprecation warnings involves upgrading to new components, changing component property
+settings, or refactoring custom component classes.
+
+Deprecation logging provides a method for checking compatibility before upgrading from one major release version to
+another. Upgrading to the latest minor release version will provide the most accurate set of deprecation warnings.
+
+It is important to note that deprecation logging applies to both components and features. Logging for deprecated
+features requires a runtime reference to the property or method impacted. Disabled components with deprecated properties
+or methods will not generate deprecation logs. For this reason, it is important to exercise all configured components
+long enough to exercise standard flow behavior.
+
+Deprecation logging can generate repeated messages depending on component configuration and usage patterns. Disabling
+deprecation logging for a specific component class can be configured by adding a `logger` element to `logback.xml`.
+The `name` attribute must start with `deprecation`, followed by the component class. Setting the `level` attribute to
+`OFF` disables deprecation logging for the component specified.
+
+[source, xml]
+----
+<logger name="deprecation.org.apache.nifi.processors.ListenLegacyProtocol" level="OFF" />
+----
+
 [[security_configuration]]
 == Security Configuration
 
@@ -468,6 +511,9 @@ JSON Web Key (JWK) provided through the jwks_uri in the metadata found at the di
 
 To enable authentication via SAML the following properties must be configured in _nifi.properties_.
 
+Configuring a Metadata URL and an Entity Identifier enables Apache NiFi to act as a SAML 2.0 Relying Party, allowing users
+to authenticate using an account managed through a SAML 2.0 Asserting Party.
+
 [options="header"]
 |==================================================================================================================================================
 | Property Name | Description
@@ -475,18 +521,29 @@ To enable authentication via SAML the following properties must be configured in
 |`nifi.security.user.saml.sp.entity.id`| The entity id of the service provider (i.e. NiFi). This value will be used as the `Issuer` for SAML authentication requests and should be a valid URI. In some cases the service provider entity id must be registered ahead of time with the identity provider.
 |`nifi.security.user.saml.identity.attribute.name`| The name of a SAML assertion attribute containing the user'sidentity. This property is optional and if not specified, or if the attribute is not found, then the NameID of the Subject will be used.
 |`nifi.security.user.saml.group.attribute.name`| The name of a SAML assertion attribute containing group names the user belongs to. This property is optional, but if populated the groups will be passed along to the authorization process.
-|`nifi.security.user.saml.metadata.signing.enabled`| Enables signing of the generated service provider metadata. The default value is `false`.
 |`nifi.security.user.saml.request.signing.enabled`| Controls the value of `AuthnRequestsSigned` in the generated service provider metadata from `nifi-api/access/saml/metadata`. This indicates that the service provider (i.e. NiFi) should not sign authentication requests sent to the identity provider, but the requests may still need to be signed if the identity provider indicates `WantAuthnRequestSigned=true`. The default value is `false`.
 |`nifi.security.user.saml.want.assertions.signed`| Controls the value of `WantAssertionsSigned` in the generated service provider metadata from `nifi-api/access/saml/metadata`. This indicates that the identity provider should sign assertions, but some identity providers may provide their own configuration for controlling whether assertions are signed. The default value is `true`.
 |`nifi.security.user.saml.signature.algorithm`| The algorithm to use when signing SAML messages. Reference the link:https://git.shibboleth.net/view/?p=java-xmltooling.git;a=blob;f=src/main/java/org/opensaml/xml/signature/SignatureConstants.java[Open SAML Signature Constants] for a list of valid values. If not specified, a default of SHA-256 will be used. The default value is `http://www.w3.org/2001/04/xmldsig-more#rsa-sha256`.
-|`nifi.security.user.saml.signature.digest.algorithm`| The digest algorithm to use when signing SAML messages. Reference the link:https://git.shibboleth.net/view/?p=java-xmltooling.git;a=blob;f=src/main/java/org/opensaml/xml/signature/SignatureConstants.java[Open SAML Signature Constants] for a list of valid values. If not specified, a default of SHA-256 will be used. The default value is `http://www.w3.org/2001/04/xmlenc#sha256`.
-|`nifi.security.user.saml.message.logging.enabled`| Enables logging of SAML messages for debugging purposes. The default value is `false`.
 |`nifi.security.user.saml.authentication.expiration`| The expiration of the NiFi JWT that will be produced from a successful SAML authentication response. The default value is `12 hours`.
 |`nifi.security.user.saml.single.logout.enabled`| Enables SAML SingleLogout which causes a logout from NiFi to logout of the identity provider. By default, a logout of NiFi will only remove the NiFi JWT. The default value is `false`.
-|`nifi.security.user.saml.http.client.truststore.strategy`| The truststore strategy when the IDP metadata URL begins with https. A value of `JDK` indicates to use the JDK's default truststore. A value of`NIFI`indicates to use the truststore specified by `nifi.security.truststore`.
+|`nifi.security.user.saml.http.client.truststore.strategy`| The truststore strategy when the IDP metadata URL begins with https. A value of `JDK` indicates to use the JDK's default truststore. A value of `NIFI` indicates to use the truststore specified by `nifi.security.truststore`.
 |`nifi.security.user.saml.http.client.connect.timeout`| The connection timeout when communicating with the SAML IDP. The default value is `30 secs`.
 |`nifi.security.user.saml.http.client.read.timeout`| The read timeout when communicating with the SAML IDP. The default value is `30 secs`.
 |==================================================================================================================================================
+
+==== SAML REST Resources
+
+SAML authentication enables the following REST API resources for integration with a SAML 2.0 Asserting Party:
+
+[options="header"]
+|======================================
+| Resource Path                                | Description
+| /nifi-api/access/saml/local-logout/request   | Complete SAML 2.0 Logout processing without communicating with the Asserting Party
+| /nifi-api/access/saml/login/consumer         | Process SAML 2.0 Login Requests assertions using HTTP-POST or HTTP-REDIRECT binding
+| /nifi-api/access/saml/metadata               | Retrieve SAML 2.0 entity descriptor metadata as XML
+| /nifi-api/access/saml/single-logout/consumer | Process SAML 2.0 Single Logout Request assertions using HTTP-POST or HTTP-REDIRECT binding. Requires Single Logout to be enabled.
+| /nifi-api/access/saml/single-logout/request  | Complete SAML 2.0 Single Logout processing initiating a request to the Asserting Party. Requires Single Logout to be enabled.
+|======================================
 
 [[apache_knox]]
 === Apache Knox
@@ -1852,6 +1909,7 @@ Following are the configuration properties available inside the `bootstrap-hashi
 [options="header,footer"]
 |===
 |Property Name|Description|Default
+|`vault.kv.version`|The Key/Value Secrets Engine version: `1` for unversioned, and `2` for versioned.  This must match the versioned enabled in Vault.|`1`
 |`vault.connection.timeout`|The connection timeout of the Vault client|`5 secs`
 |`vault.read.timeout`|The read timeout of the Vault client|`15 secs`
 |`vault.ssl.enabledCipherSuites`|A comma-separated list of the enabled TLS cipher suites|_none_
@@ -2881,7 +2939,7 @@ A complete example of configuring the HTTP service could look like the following
 
 [[proxy_configuration]]
 == Proxy Configuration
-​When running Apache NiFi behind a proxy there are a couple of key items to be aware of during deployment.
+When running Apache NiFi behind a proxy there are a couple of key items to be aware of during deployment.
 
 * NiFi is comprised of a number of web applications (web UI, web API, documentation, custom UIs, data viewers, etc), so the mapping needs to be configured for the *root path*. That way all context
 paths are passed through accordingly. For instance, if only the `/nifi` context path was mapped, the custom UI for UpdateAttribute will not work, since it is available at `/update-attribute-ui-<version>`.
@@ -2949,6 +3007,55 @@ present in the allow list, the "An unexpected error has occurred" page will be s
 * Additional configurations at both proxy server and NiFi cluster are required to make NiFi Site-to-Site work behind reverse proxies. See <<site_to_site_reverse_proxy_properties>> for details.
 
 ** In order to transfer data via Site-to-Site protocol through reverse proxies, both proxy and Site-to-Site client NiFi users need to have following policies, 'retrieve site-to-site details', 'receive data via site-to-site' for input ports, and 'send data via site-to-site' for output ports.
+
+[[session_affinity]]
+=== Session Affinity
+
+All HTTP requests from a single client must be routed to the same Apache NiFi node for the duration of an authenticated
+session. This applies to both browser-based users and programmatic clients accessing the REST API. This is not a concern
+for standalone deployments or direct network access to Apache NiFi, but accessing clustered nodes through a proxy server
+or load balancer requires enabling session affinity, also known as sticky sessions. Session affinity is required for
+mediated access to traditional cluster deployments as well as containerized deployments using platforms such as
+Kubernetes.
+
+Access to clustered deployments through a gateway requires session affinity for the following reasons:
+
+* Each node uses a local key for signing and verifying JSON Web Tokens
+* Each node uses a local cache for tracking configuration change transactions
+
+Attempting to access a clustered node through a gateway without session affinity will result in intermittent failures of
+various types. When authenticating to Apache NiFi with username and password credentials, the lack of session affinity
+often results in HTTP 401 Unauthorized responses, indicating that the node did not accept the JSON Web Token. These
+failures can occur at different times based on the load balancing strategy. Accessing Apache NiFi using an X.509
+certificate avoids the verification issues associated with JSON Web Tokens, but is still subject to problems related to
+configuration change transaction handling across cluster nodes.
+
+==== Session Affinity Configuration
+
+Enabling session affinity requires different settings depending on the product or service providing access. It is
+essential that the session affinity configuration has a timeout that is greater than the session expiration when
+authenticating with username and password credentials.
+
+===== Apache HTTP Server Configuration
+
+link:https://httpd.apache.org[Apache HTTP Server] supports session affinity in the
+link:https://httpd.apache.org/docs/2.4/mod/mod_proxy.html[mod_proxy] module using the
+link:https://httpd.apache.org/docs/2.4/mod/mod_proxy.html#proxypass[ProxyPass] directive with the
+link:https://httpd.apache.org/docs/2.4/mod/mod_proxy_balancer.html#stickyness_implementation[stickysession] parameter to
+configure a cookie name for request routing.
+
+===== Kubernetes Nginx Ingress Controller
+
+The link:https://kubernetes.github.io/ingress-nginx/[Kubernetes Nginx Ingress Controller]
+supports session affinity using deployment annotations to configure
+link:https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/[sticky sessions] with cookies. The deployment
+annotations provide the ability to configure cookie attributes, including expiration.
+
+===== Nginx Configuration
+
+link:https://nginx.org/[Nginx] supports session affinity in the upstream module using the
+link:https://nginx.org/en/docs/http/ngx_http_upstream_module.html#sticky[sticky] directive. The *sticky* directive
+supports different strategies, including *cookie* and *route* options.
 
 [[kerberos_service]]
 == Kerberos Service
@@ -3074,6 +3181,9 @@ For example, to provide two additional library locations, a user could also spec
 Providing three total locations, including  `nifi.nar.library.directory`.
 |`nifi.nar.working.directory`|The location of the nar working directory. The default value is `./work/nar` and probably should be left as is.
 |`nifi.documentation.working.directory`|The documentation working directory. The default value is `./work/docs/components` and probably should be left as is.
+|`nifi.nar.unpack.uber.jar`|If set to `true`, when a nar file is unpacked, the inner jar files will be unpacked into a single jar file instead of individual jar files. This can result in NiFi taking
+longer to startup for the first time (about 1-2 minutes, typically) but can result in far fewer open file handles, which can be helpful in certain environments. The default value is `false`. This
+feature is considered experimental. Changing the value of this property may not take effect unless the working directory is also deleted.
 |`nifi.processor.scheduling.timeout`|Time to wait for a Processor's life-cycle operation (`@OnScheduled` and `@OnUnscheduled`) to finish before other life-cycle operation (e.g., *stop*) could be invoked. The default value is `1 min`.
 |===
 
@@ -3194,6 +3304,8 @@ This implementation stores FlowFiles in memory instead of on disk.  It *will* re
 
 
 === RocksDB FlowFile Repository
+
+WARNING: The `RocksDBFlowFileRepository` is deprecated in favor of the `WriteAheadFlowFileRepository`. It will be removed in future major versions of Apache NiFi. To use it in NiFi 1.x, you must download nifi-rocksdb-nar from the Apache Nexus Repository and place it in your NiFi lib directory.
 
 This implementation makes use of the RocksDB key-value store.  It uses periodic synchronization to ensure that no created or received data is lost (as long as `nifi.flowfile.repository.rocksdb.accept.data.loss` is set `false`).  In the event of a failure (e.g. power loss), _work_ done on FlowFiles through the system (i.e. routing and transformation) may still be lost.  Specifically, the record of these actions may be lost, reverting the affected FlowFiles to a previous, valid state.  From there, they will resume their path through the flow as normal.  This guarantee comes at the expense of a delay on operations that add new data to the system.  This delay is configurable (as `nifi.flowfile.repository.rocksdb.sync.period`), and can be tuned to the individual system.
 
@@ -3318,14 +3430,14 @@ FlowFile Repository, if also on that disk, could become corrupt. To avoid this s
 
 |====
 |*Property*|*Description*
-|`nifi.content.repository.implementation`|The Content Repository implementation. The default value is `org.apache.nifi.controller.repository.FileSystemRepository` and should only be changed with caution. To store flowfile content in memory instead of on disk (at the risk of data loss in the event of power/machine failure), set this property to `org.apache.nifi.controller.repository.VolatileContentRepository`.
+|`nifi.content.repository.implementation`|The Content Repository implementation. The default value is `org.apache.nifi.controller.repository.FileSystemRepository`.
 |====
 
 === File System Content Repository Properties
 
 |====
 |*Property*|*Description*
-|`nifi.content.repository.implementation`|The Content Repository implementation. The default value is `org.apache.nifi.controller.repository.FileSystemRepository` and should only be changed with caution. To store flowfile content in memory instead of on disk (at the risk of data loss in the event of power/machine failure), set this property to `org.apache.nifi.controller.repository.VolatileContentRepository`.
+|`nifi.content.repository.implementation`|The Content Repository implementation. The default value is `org.apache.nifi.controller.repository.FileSystemRepository`.
 |`nifi.content.claim.max.appendable.size`|When NiFi processes many small FlowFiles, the contents of those FlowFiles are stored in the content repository, but we do not store the content of each
 individual FlowFile as a separate file in the content repository. Doing so would be very detrimental to performance, if each 120 byte FlowFile, for instance, was written to its own file. Instead,
 we continue writing to the same file until it reaches some threshold. This property configures that threshold. Setting the value too small can result in poor performance due to reading from and
@@ -3374,14 +3486,6 @@ All of the properties defined above (see <<file-system-content-repository-proper
 |`nifi.content.repository.encryption.key.id`|The active key ID to use for encryption (e.g. `Key1`).
 |`nifi.content.repository.encryption.key`|The key to use for `StaticKeyProvider`. The key format is hex-encoded (`0123456789ABCDEFFEDCBA98765432100123456789ABCDEFFEDCBA9876543210`) but can also be encrypted using the `./encrypt-config.sh` tool in NiFi Toolkit (see the <<toolkit-guide.adoc#encrypt_config_tool,Encrypt-Config Tool>> section in the link:toolkit-guide.html[NiFi Toolkit Guide] for more information).
 |`nifi.content.repository.encryption.key.id.`*|Allows for additional keys to be specified for the `StaticKeyProvider`. For example, the line `nifi.content.repository.encryption.key.id.Key2=012...210` would provide an available key `Key2`.
-|====
-
-=== Volatile Content Repository Properties
-
-|====
-|*Property*|*Description*
-|`nifi.volatile.content.repository.max.size`|The Content Repository maximum size in memory. The default value is `100 MB`.
-|`nifi.volatile.content.repository.block.size`|The Content Repository block size. The default value is `32 KB`.
 |====
 
 === Provenance Repository
@@ -3891,6 +3995,13 @@ For example, to provide two additional network interfaces, a user could also spe
 `nifi.web.https.network.interface.eth1=eth1` +
 +
 Providing three total network interfaces, including  `nifi.web.https.network.interface.default`.
+|`nifi.web.https.application.protocols`|The space-separated list of application protocols supported when running with HTTPS enabled.
+
+The default value is `http/1.1`.
+
+The value can be set to `h2 http/1.1` to support Application Layer Protocol Negotiation (ALPN) for HTTP/2 or HTTP/1.1 based on client capabilities.
+
+The value can be set to `h2` to require HTTP/2 and disable HTTP/1.1.
 |`nifi.web.jetty.working.directory`|The location of the Jetty working directory. The default value is `./work/jetty`.
 |`nifi.web.jetty.threads`|The number of Jetty threads. The default value is `200`.
 |`nifi.web.max.header.size`|The maximum size allowed for request and response headers. The default value is `16 KB`.
@@ -4114,8 +4225,35 @@ To enable it, both `nifi.monitor.long.running.task.schedule` and `nifi.monitor.l
 |*Property*|*Description*
 |`nifi.monitor.long.running.task.schedule`|The time period between successive executions of the Long-Running Task Monitor (e.g. `1 min`).
 |`nifi.monitor.long.running.task.threshold`|The time period beyond which a task is considered long-running, i.e. stuck / hanging (e.g. `5 mins`).
-
 |====
+
+
+[[performance_tracking_properties]]
+=== Performance Tracking Properties
+
+NiFi exposes a very significant number of metrics by default through the User Interface. However, there are sometimes additional metrics that may add in diagnosing bottlenecks
+and improving the performance of the NiFi dataflow.
+
+The `nifi.performance.tracking.percentage` property can be used to enable the tracking of additional metrics. Gathering these metrics, however, require system calls, which can be
+expensive on some systems. As a result, this property defaults to a value of `0`, indicating that the metrics should be captured 0% of the time. I.e., the feature is disabled by
+default. To enable this feature, set the value of this property to an integer value in the range of 0 to 100, inclusive. This represents what percentage of the time NiFi should
+gather these metrics.
+
+For example, if the value is set to 20, then NiFi will gather these metrics for each processor approximately 20% of the times that the Processor is run. The remainder of the time,
+it will use the values that it has already captured in order to extrapolate the metrics to additional runs.
+
+The metrics that are gathered include what percentage of the time the processor is utilizing the CPU (versus waiting for I/O to complete or blocking due to monitor/lock contention),
+what percentage of time the Processor spends reading from the Content Repository, writing to the Content Repository, blocked due to Garbage Collection, etc.
+
+So, continuing our example, if we set the value of the `nifi.performance.tracking.percentage` and a processor is triggered to run 1,000 times, then NiFi will measure how much CPU
+time was consumed over the 200 iterations during which it was measured (i.e., 20% of 1,000). Let's say that this amounts to 500 milliseconds of CPU time. Additionally, let's consider
+that the Processor took 5,000 milliseconds to complete those 200 invocations because most of the time was spent blocking on Socket I/O. From this, NiFi will calculate that the CPU
+is used approximately 10% of the time (500 / 5,000 * 100%). Now, let's consider that in order to complete all 1,000 invocations the Processor took 35 seconds. NiFi will calculate,
+then, that the Processor has used approximately 3.5 seconds (or 3500 milliseconds) of CPU time.
+
+As a result, if we set the value of this property higher, up to a value of `100`, we will get more accurate results. However, it may be more expensive to monitor.
+
+In order to view these metrics, we can gather diagnostics by running the command `nifi.sh diagnostics <filename>` and inspecting the generated file. See <<nifi_diagnostics>> for more information.
 
 [[custom_properties]]
 === Custom Properties
@@ -4139,7 +4277,16 @@ Custom properties can also be configured in the NiFi UI.  See the <<user-guide.a
 [[nar_provider_properties]]
 === NAR Provider Properties
 
-These properties allow configuring one or more NAR providers. A NAR provider retrieves NARs from an external source and copies them to the directory specified by `nifi.nar.library.autoload.directory`.
+These properties are used for all the configured providers.
+
+|====
+|*Property*|*Description*
+|`nifi.nar.library.poll.interval`|The interval between polls. The default value is `5 min`.
+|`nifi.nar.library.conflict.resolution`|The name of the conflict resolution strategy to use. The default is `IGNORE`.
+|`nifi.nar.library.restrain.startup`|If true, the provider restrains NiFi from startup until the first successful resource fetch.
+|====
+
+The following properties allow configuring one or more NAR providers. A NAR provider retrieves NARs from an external source and copies them to the directory specified by `nifi.nar.library.autoload.directory`.
 
 Each NAR provider property follows the format `nifi.nar.library.provider.<identifier>.<property-name>` and each provider must have at least one property named `implementation`.
 
@@ -4149,7 +4296,7 @@ The HDFS NAR provider retrieves NARs using the Hadoop FileSystem API. This can b
 
 |====
 |*Property*|*Description*
-|`nifi.nar.library.provider.hdfs.implementation`| The fully qualified class name of the implementation class which is `org.apache.nifi.nar.hadoop.HDFSNarProvider`.
+|`nifi.nar.library.provider.hdfs.implementation`| The fully qualified class name of the implementation class which is `org.apache.nifi.flow.resource.hadoop.HDFSExternalResourceProvider`.
 |`nifi.nar.library.provider.hdfs.resources`| The comma separated list of configuration resources, such as `core-site.xml`.
 |`nifi.nar.library.provider.hdfs.storage.location`| The optional storage location, such as `hdfs://hdfs-location`. If not specified, the `defaultFs` from `core-site.xml` will be used.
 |`nifi.nar.library.provider.hdfs.source.directory`| The directory within the storage location where NARs are located.
@@ -4456,24 +4603,41 @@ Ensure that the file has appropriate permissions for the nifi user and group.
 
 Refresh the browser page and the custom processor should now be available when adding a new Processor to your flow.
 
+[[nar-providers]]
 === NAR Providers
 
-NiFi supports fetching NAR files for the autoloading feature from external sources. This can be achieved by using NAR Providers. A NAR Provider serves as a connector between an external data store
-and NiFi.
+NiFi supports fetching NAR files for the autoloading feature from external sources. This can be achieved by using External Resource Providers.
 
-When configured, a NAR Provider polls the external source for available NAR files and offers them to the framework. The framework then fetches new NAR files and copies them to
+An External Resource Provider serves as a connector between an external data source and NiFi.
+
+When configured, an External Resource Provider polls the external source for available NAR files and offers them to the framework. The framework then fetches new NAR files and copies them to
 the `nifi.nar.library.autoload.directory` for autoloading.
 
-NAR Provider can be configured by adding the `nifi.nar.library.provider.<providerName>.implementation` property with value containing the proper implementation class. Some implementations might need
+By default, the polling will happen every 5 minutes. It is possible to change this frequency by specifying the property `nifi.nar.library.poll.interval`.
+
+By default NAR files will be downloaded if no file with the same name exists in the folder defined by `nifi.nar.library.autoload.directory`. By setting the `nifi.nar.library.conflict.resolution` other conflict resolution strategies might be applied. Currently, the following strategies are supported:
+
+|===
+| Name      |  Description
+| IGNORE    |  Will not replace files: if a file exists in the directory with the same name, it will not be downloaded again.
+| REPLACE   |  Will replace a file in the target directory if there is an available file in the source but with newer modification date.
+|===
+
+Until the first External Resource collection succeeds for every provider, the service prevents NiFi from finishing startup. In order to override this behaviour, the `nifi.nar.library.restrain.startup` needs to be declared.
+
+With value `true` the service prevents NiFi from starting up until the execution succeeds, with `false` it does not. The default value is `true` in case of the property is not set.
+
+An External Resource Provider can be configured by adding the `nifi.nar.library.provider.<providerName>.implementation` property with value containing the proper implementation class. Some implementations might need
 further properties. These are defined by the implementation and must be prefixed with `nifi.nar.library.provider.<providerName>.`.
 
-The `<providerName>` is arbitrary and serves to correlate multiple properties together for a single provider. Multiple providers might be set, with different `<providerName>`. Currently NiFi supports HDFS based NAR provider.
+The `<providerName>` is arbitrary and serves to correlate multiple properties together for a single provider. Multiple providers might be set, with different `<providerName>`. Currently NiFi supports HDFS based providers.
 
-==== HDFS NAR Provider
+==== HDFS External Resource Provider
 
-This implementation is capable of downloading NAR files from an HDFS file system.
+This implementation is capable of downloading files from an HDFS file system.
 
-The value of the `nifi.nar.library.provider.<providerName>.implementation` must be `org.apache.nifi.nar.hadoop.HDFSNarProvider`. The following further properties are defined by the provider:
+The value of the `nifi.nar.library.provider.<providerName>.implementation` must be `org.apache.nifi.flow.resource.hadoop.HDFSExternalResourceProvider`.
+The following additional properties are defined by the provider:
 
 [options="header"]
 |===
@@ -4488,14 +4652,17 @@ The value of the `nifi.nar.library.provider.<providerName>.implementation` must 
 
 Example configuration:
 
-   nifi.nar.library.provider.hdfs1.implementation=org.apache.nifi.nar.hadoop.HDFSNarProvider
+   nifi.nar.library.provider.hdfs1.implementation=org.apache.nifi.flow.resource.hadoop.HDFSExternalResourceProvider
    nifi.nar.library.provider.hdfs1.resources=/etc/hadoop/core-site.xml
    nifi.nar.library.provider.hdfs1.source.directory=/customNars
 
-   nifi.nar.library.provider.hdfs2.implementation=org.apache.nifi.nar.hadoop.HDFSNarProvider
+   nifi.nar.library.provider.hdfs2.implementation=org.apache.nifi.flow.resource.hadoop.HDFSExternalResourceProvider
    nifi.nar.library.provider.hdfs2.resources=/etc/hadoop/core-site.xml
    nifi.nar.library.provider.hdfs2.source.directory=/other/dir/for/customNars
 
+NOTE: For backward compatibility reasons, `org.apache.nifi.nar.hadoop.HDFSNarProvider` is still an accepted implementation, but it is suggested to use 'org.apache.nifi.flow.resource.hadoop.HDFSExternalResourceProvider' instead.Features introduced with the External Resource Provider might not work with this implementation!
+
+[[nifi_diagnostics]]
 == NiFi diagnostics
 
 It is possible to get diagnostics data from a NiFi node by executing the below command:

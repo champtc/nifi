@@ -19,7 +19,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
 
     <artifactId>nifi-graph-bundle</artifactId>
@@ -41,16 +41,10 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Override snakeyaml:1.15 -->
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>1.29</version>
-            </dependency>
             <dependency>
                 <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-graph-processors</artifactId>
-                <version>1.16.3</version>
+                <version>1.18.0</version>
             </dependency>
             <!-- Override commons-compress -->
             <dependency>
@@ -84,9 +78,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

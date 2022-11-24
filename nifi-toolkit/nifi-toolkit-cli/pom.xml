@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-toolkit</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <artifactId>nifi-toolkit-cli</artifactId>
     <description>Tooling to make tls configuration easier</description>
@@ -57,7 +57,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-client-dto</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
             <exclusions>
                 <exclusion>
                     <groupId>ch.qos.logback</groupId>
@@ -82,11 +82,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.apache.nifi.registry</groupId>
-            <artifactId>nifi-registry-client</artifactId>
-            <version>1.16.3</version>
-        </dependency>
-        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
@@ -103,7 +98,6 @@
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-            <version>2.10.0</version>
         </dependency>
         <dependency>
             <groupId>commons-codec</groupId>
@@ -112,17 +106,15 @@
         <dependency>
             <groupId>org.glassfish.jersey.media</groupId>
             <artifactId>jersey-media-multipart</artifactId>
-            <version>2.27</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.media</groupId>
             <artifactId>jersey-media-jaxb</artifactId>
-            <version>2.27</version>
         </dependency>
         <dependency>
             <groupId>com.opencsv</groupId>
             <artifactId>opencsv</artifactId>
-            <version>5.4</version>
+            <version>5.7.0</version>
             <exclusions>
                 <exclusion>
                     <groupId>commons-logging</groupId>
@@ -135,8 +127,4 @@
             <artifactId>jcl-over-slf4j</artifactId>
         </dependency>
     </dependencies>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

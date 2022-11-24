@@ -29,12 +29,15 @@ import org.apache.nifi.controller.ProcessScheduler;
 import org.apache.nifi.controller.ProcessorNode;
 import org.apache.nifi.controller.ScheduledState;
 import org.apache.nifi.controller.flow.FlowManager;
+import org.apache.nifi.controller.queue.FlowFileQueue;
+import org.apache.nifi.controller.queue.LoadBalanceStrategy;
 import org.apache.nifi.controller.queue.QueueSize;
 import org.apache.nifi.controller.repository.FlowFileEvent;
 import org.apache.nifi.controller.repository.FlowFileEventRepository;
 import org.apache.nifi.controller.repository.RepositoryStatusReport;
 import org.apache.nifi.controller.repository.metrics.EmptyFlowFileEvent;
 import org.apache.nifi.controller.status.ConnectionStatus;
+import org.apache.nifi.controller.status.LoadBalanceStatus;
 import org.apache.nifi.controller.status.PortStatus;
 import org.apache.nifi.controller.status.ProcessGroupStatus;
 import org.apache.nifi.controller.status.ProcessorStatus;
@@ -300,6 +303,16 @@ public abstract class AbstractEventAccess implements EventAccess {
                 connStatus.setQueuedCount(connectionQueuedCount);
             }
 
+            final FlowFileQueue flowFileQueue = conn.getFlowFileQueue();
+            final LoadBalanceStrategy loadBalanceStrategy = flowFileQueue.getLoadBalanceStrategy();
+            if (loadBalanceStrategy == LoadBalanceStrategy.DO_NOT_LOAD_BALANCE) {
+                connStatus.setLoadBalanceStatus(LoadBalanceStatus.LOAD_BALANCE_NOT_CONFIGURED);
+            } else if (flowFileQueue.isActivelyLoadBalancing()) {
+                connStatus.setLoadBalanceStatus(LoadBalanceStatus.LOAD_BALANCE_ACTIVE);
+            } else {
+                connStatus.setLoadBalanceStatus(LoadBalanceStatus.LOAD_BALANCE_INACTIVE);
+            }
+
             if (populateChildStatuses) {
                 connectionStatusCollection.add(connStatus);
             }
@@ -497,6 +510,9 @@ public abstract class AbstractEventAccess implements EventAccess {
         final RemoteProcessGroupStatus status = new RemoteProcessGroupStatus();
         status.setGroupId(remoteGroup.getProcessGroup().getIdentifier());
         status.setName(isRemoteProcessGroupAuthorized ? remoteGroup.getName() : remoteGroup.getIdentifier());
+        status.setComments(isRemoteProcessGroupAuthorized ? remoteGroup.getComments() : null);
+        status.setAuthorizationIssue(remoteGroup.getAuthorizationIssue());
+        status.setLastRefreshTime(remoteGroup.getLastRefreshTime());
         status.setTargetUri(isRemoteProcessGroupAuthorized ? remoteGroup.getTargetUri() : null);
 
         long lineageMillis = 0L;

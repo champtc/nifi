@@ -15,10 +15,9 @@ language governing permissions and limitations under the License. -->
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-nar-bundles</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
 
-    <groupId>org.apache.nifi</groupId>
     <artifactId>nifi-elasticsearch-bundle</artifactId>
     <packaging>pom</packaging>
 
@@ -35,21 +34,15 @@ language governing permissions and limitations under the License. -->
 
     <dependencyManagement>
         <dependencies>
-            <!-- Override snakeyaml:1.15 from elasticsearch -->
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>1.29</version>
-            </dependency>
             <dependency>
                 <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-elasticsearch-processors</artifactId>
-                <version>1.16.3</version>
+                <version>1.18.0</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-elasticsearch-restapi-processors</artifactId>
-                <version>1.16.3</version>
+                <version>1.18.0</version>
             </dependency>
             <!-- Override commons-compress -->
             <dependency>
@@ -59,9 +52,4 @@ language governing permissions and limitations under the License. -->
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

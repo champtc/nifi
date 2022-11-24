@@ -20,7 +20,7 @@ limitations under the License.
     <parent>
         <artifactId>minifi</artifactId>
         <groupId>org.apache.nifi.minifi</groupId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <artifactId>minifi-bootstrap</artifactId>
     <packaging>jar</packaging>
@@ -38,6 +38,11 @@ limitations under the License.
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-api</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.nifi</groupId>
+            <artifactId>c2-client-api</artifactId>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -95,6 +100,15 @@ limitations under the License.
             <artifactId>commons-io</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
     </dependencies>
 
 
@@ -112,9 +126,4 @@ limitations under the License.
             </plugin>
         </plugins>
     </build>
-
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

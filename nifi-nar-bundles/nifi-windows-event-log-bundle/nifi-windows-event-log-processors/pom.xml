@@ -14,7 +14,7 @@ language governing permissions and limitations under the License. -->
     <parent>
         <artifactId>nifi-windows-event-log-bundle</artifactId>
         <groupId>org.apache.nifi</groupId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
 
     <artifactId>nifi-windows-event-log-processors</artifactId>
@@ -22,7 +22,7 @@ language governing permissions and limitations under the License. -->
 
     <properties>
         <jna.version>5.10.0</jna.version>
-        <javassist.version>3.23.1-GA</javassist.version>
+        <javassist.version>3.29.1-GA</javassist.version>
     </properties>
 
     <dependencies>
@@ -39,7 +39,7 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-utils</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>net.java.dev.jna</groupId>
@@ -54,12 +54,11 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
-            <version>2.10.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-mock</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -69,9 +68,4 @@ language governing permissions and limitations under the License. -->
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

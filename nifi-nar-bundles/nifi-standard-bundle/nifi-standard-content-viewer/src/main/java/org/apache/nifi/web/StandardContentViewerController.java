@@ -30,6 +30,8 @@ import org.apache.nifi.xml.processing.transform.StandardTransformProvider;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
 import org.joda.time.LocalTime;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -41,6 +43,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Set;
 
 public class StandardContentViewerController extends HttpServlet {
@@ -56,6 +59,13 @@ public class StandardContentViewerController extends HttpServlet {
         supportedMimeTypes.add("application/avro-binary");
         supportedMimeTypes.add("avro/binary");
         supportedMimeTypes.add("application/avro+binary");
+        supportedMimeTypes.add("text/x-yaml");
+        supportedMimeTypes.add("text/yaml");
+        supportedMimeTypes.add("text/yml");
+        supportedMimeTypes.add("application/x-yaml");
+        supportedMimeTypes.add("application/x-yml");
+        supportedMimeTypes.add("application/yaml");
+        supportedMimeTypes.add("application/yml");
     }
 
     /**
@@ -107,19 +117,23 @@ public class StandardContentViewerController extends HttpServlet {
                     // Use Avro conversions to display logical type values in human readable way.
                     final GenericData genericData = new GenericData(){
                         @Override
-                        protected void toString(Object datum, StringBuilder buffer) {
+                        protected void toString(Object datum, StringBuilder buffer, IdentityHashMap<Object, Object> seenObjects) {
                             // Since these types are not quoted and produce a malformed JSON string, quote it here.
                             if (datum instanceof LocalDate || datum instanceof LocalTime || datum instanceof DateTime) {
                                 buffer.append("\"").append(datum).append("\"");
                                 return;
                             }
-                            super.toString(datum, buffer);
+                            super.toString(datum, buffer, seenObjects);
                         }
                     };
                     genericData.addLogicalTypeConversion(new Conversions.DecimalConversion());
                     genericData.addLogicalTypeConversion(new TimeConversions.DateConversion());
-                    genericData.addLogicalTypeConversion(new TimeConversions.TimeConversion());
-                    genericData.addLogicalTypeConversion(new TimeConversions.TimestampConversion());
+                    genericData.addLogicalTypeConversion(new TimeConversions.TimeMicrosConversion());
+                    genericData.addLogicalTypeConversion(new TimeConversions.TimeMillisConversion());
+                    genericData.addLogicalTypeConversion(new TimeConversions.TimestampMicrosConversion());
+                    genericData.addLogicalTypeConversion(new TimeConversions.TimestampMillisConversion());
+                    genericData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMicrosConversion());
+                    genericData.addLogicalTypeConversion(new TimeConversions.LocalTimestampMillisConversion());
                     final DatumReader<GenericData.Record> datumReader = new GenericDatumReader<>(null, null, genericData);
                     try (final DataFileStream<GenericData.Record> dataFileReader = new DataFileStream<>(content.getContentStream(), datumReader)) {
                         while (dataFileReader.hasNext()) {
@@ -145,6 +159,20 @@ public class StandardContentViewerController extends HttpServlet {
                     formatted = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objectJson);
 
                     contentType = "application/json";
+                } else if ("text/x-yaml".equals(contentType) || "text/yaml".equals(contentType) || "text/yml".equals(contentType)
+                        || "application/x-yaml".equals(contentType) || "application/x-yml".equals(contentType)
+                        || "application/yaml".equals(contentType) || "application/yml".equals(contentType)) {
+                    Yaml yaml = new Yaml();
+                    // Parse the YAML file
+                    final Object yamlObject = yaml.load(content.getContentStream());
+                    DumperOptions options = new DumperOptions();
+                    options.setIndent(2);
+                    options.setPrettyFlow(true);
+                    // Fix below - additional configuration
+                    options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+                    Yaml output = new Yaml(options);
+                    formatted = output.dump(yamlObject);
+
                 } else {
                     // leave plain text alone when formatting
                     formatted = content.getContent();

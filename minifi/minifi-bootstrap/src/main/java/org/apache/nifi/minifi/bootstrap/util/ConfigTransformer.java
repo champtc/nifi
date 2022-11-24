@@ -17,6 +17,34 @@
 
 package org.apache.nifi.minifi.bootstrap.util;
 
+import static org.apache.nifi.minifi.bootstrap.configuration.ingestors.PullHttpChangeIngestor.OVERRIDE_SECURITY;
+import static org.apache.nifi.minifi.bootstrap.configuration.ingestors.PullHttpChangeIngestor.PULL_HTTP_BASE_KEY;
+
+import java.io.ByteArrayInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.StringWriter;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import org.apache.commons.io.input.TeeInputStream;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.minifi.bootstrap.configuration.ConfigurationChangeException;
@@ -55,75 +83,81 @@ import org.w3c.dom.DOMException;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.stream.Collectors;
-import java.util.zip.GZIPOutputStream;
-
 public final class ConfigTransformer {
-    // Underlying version of NIFI will be using
-    public static final String ROOT_GROUP = "Root-Group";
-
+    private static final String OVERRIDE_CORE_PROPERTIES_KEY = PULL_HTTP_BASE_KEY + ".override.core";
     private static final Base64.Encoder KEY_ENCODER = Base64.getEncoder().withoutPadding();
     private static final int SENSITIVE_PROPERTIES_KEY_LENGTH = 24;
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConfigTransformer.class);
 
-    public static final Logger logger = LoggerFactory.getLogger(ConfigTransformer.class);
+    // Underlying version of NIFI will be using
+    public static final String ROOT_GROUP = "Root-Group";
 
     // Final util classes should have private constructor
     private ConfigTransformer() {
     }
 
+    public static ByteBuffer generateConfigFiles(InputStream configIs, String configDestinationPath, Properties bootstrapProperties) throws ConfigurationChangeException, IOException {
+        try (java.io.ByteArrayOutputStream byteArrayOutputStream = new java.io.ByteArrayOutputStream();
+            TeeInputStream teeInputStream = new TeeInputStream(configIs, byteArrayOutputStream)) {
+
+            ConfigTransformer.transformConfigFile(
+                teeInputStream,
+                configDestinationPath,
+                bootstrapProperties
+            );
+
+            return ByteBuffer.wrap(byteArrayOutputStream.toByteArray());
+        } catch (ConfigurationChangeException e){
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("Unable to successfully transform the provided configuration", e);
+        }
+    }
+
     public static void transformConfigFile(InputStream sourceStream, String destPath, Properties bootstrapProperties) throws Exception {
-        ConvertableSchema<ConfigSchema> convertableSchema = throwIfInvalid(SchemaLoader.loadConvertableSchemaFromYaml(sourceStream));
-        ConfigSchema configSchema = throwIfInvalid(convertableSchema.convert());
+        ConvertableSchema<ConfigSchema> convertableSchemaNew = throwIfInvalid(SchemaLoader.loadConvertableSchemaFromYaml(sourceStream));
+        ConfigSchema configSchemaNew = throwIfInvalid(convertableSchemaNew.convert());
 
         SecurityPropertiesSchema securityProperties = BootstrapTransformer.buildSecurityPropertiesFromBootstrap(bootstrapProperties).orElse(null);
         ProvenanceReportingSchema provenanceReportingProperties = BootstrapTransformer.buildProvenanceReportingPropertiesFromBootstrap(bootstrapProperties).orElse(null);
 
         // See if we are providing defined properties from the filesystem configurations and use those as the definitive values
         if (securityProperties != null) {
-            configSchema.setSecurityProperties(securityProperties);
-            logger.info("Bootstrap flow override: Replaced security properties");
+            configSchemaNew.setSecurityProperties(securityProperties);
+            LOGGER.info("Bootstrap flow override: Replaced security properties");
         }
+
         if (provenanceReportingProperties != null) {
-            configSchema.setProvenanceReportingProperties(provenanceReportingProperties);
-            logger.info("Bootstrap flow override: Replaced provenance reporting properties");
+            configSchemaNew.setProvenanceReportingProperties(provenanceReportingProperties);
+            LOGGER.info("Bootstrap flow override: Replaced provenance reporting properties");
         }
 
         // Replace all processor SSL controller services with MiNiFi parent, if bootstrap boolean is set to true
         if (BootstrapTransformer.processorSSLOverride(bootstrapProperties)) {
-            for (ProcessorSchema processorConfig : configSchema.getProcessGroupSchema().getProcessors()) {
+            for (ProcessorSchema processorConfig : configSchemaNew.getProcessGroupSchema().getProcessors()) {
                 processorConfig.getProperties().replace("SSL Context Service", processorConfig.getProperties().get("SSL Context Service"), "SSL-Context-Service");
-                logger.info("Bootstrap flow override: Replaced {} SSL Context Service with parent MiNiFi SSL", processorConfig.getName());
+                LOGGER.info("Bootstrap flow override: Replaced {} SSL Context Service with parent MiNiFi SSL", processorConfig.getName());
             }
         }
 
+        Optional.ofNullable(bootstrapProperties)
+            .map(Properties::entrySet)
+            .orElse(Collections.emptySet())
+            .stream()
+            .filter(entry -> ((String) entry.getKey()).startsWith("c2"))
+            .forEach(entry -> configSchemaNew.getNifiPropertiesOverrides().putIfAbsent((String) entry.getKey(), (String) entry.getValue()));
+
         // Create nifi.properties and flow.xml.gz in memory
         ByteArrayOutputStream nifiPropertiesOutputStream = new ByteArrayOutputStream();
-        writeNiFiProperties(configSchema, nifiPropertiesOutputStream);
+        writeNiFiProperties(configSchemaNew, nifiPropertiesOutputStream);
 
-        writeFlowXmlFile(configSchema, destPath);
+        writeFlowXmlFile(configSchemaNew, destPath);
 
         // Write nifi.properties and flow.xml.gz
         writeNiFiPropertiesFile(nifiPropertiesOutputStream, destPath);
     }
 
-    private static <T extends Schema> T throwIfInvalid(T schema) throws InvalidConfigurationException {
+    public static <T extends Schema> T throwIfInvalid(T schema) throws InvalidConfigurationException {
         if (!schema.isValid()) {
             throw new InvalidConfigurationException("Failed to transform config file due to:["
                     + schema.getValidationIssues().stream().sorted().collect(Collectors.joining("], [")) + "]");
@@ -257,7 +291,7 @@ public final class ConfigTransformer {
             final String notnullSensitivePropertiesKey;
             // Auto-generate the sensitive properties key if not provided, NiFi security libraries require it
             if (StringUtil.isNullOrEmpty(sensitivePropertiesKey)) {
-                logger.warn("Generating Random Sensitive Properties Key [{}]", NiFiProperties.SENSITIVE_PROPS_KEY);
+                LOGGER.warn("Generating Random Sensitive Properties Key [{}]", NiFiProperties.SENSITIVE_PROPS_KEY);
                 final SecureRandom secureRandom = new SecureRandom();
                 final byte[] sensitivePropertiesKeyBinary = new byte[SENSITIVE_PROPERTIES_KEY_LENGTH];
                 secureRandom.nextBytes(sensitivePropertiesKeyBinary);
@@ -705,8 +739,8 @@ public final class ConfigTransformer {
 
     protected static void addPosition(final Element parentElement) {
         final Element element = parentElement.getOwnerDocument().createElement("position");
-        element.setAttribute("x", String.valueOf("0"));
-        element.setAttribute("y", String.valueOf("0"));
+        element.setAttribute("x", "0");
+        element.setAttribute("y", "0");
         parentElement.appendChild(element);
     }
 
@@ -719,6 +753,52 @@ public final class ConfigTransformer {
         final Element toAdd = doc.createElement(name);
         toAdd.setTextContent(value);
         element.appendChild(toAdd);
+    }
+
+    public static ByteBuffer overrideNonFlowSectionsFromOriginalSchema(byte[] newSchema, ByteBuffer currentConfigScheme, Properties bootstrapProperties)
+        throws InvalidConfigurationException {
+        try {
+            boolean overrideCoreProperties = ConfigTransformer.overrideCoreProperties(bootstrapProperties);
+            boolean overrideSecurityProperties = ConfigTransformer.overrideSecurityProperties(bootstrapProperties);
+            if (overrideCoreProperties && overrideSecurityProperties) {
+                return ByteBuffer.wrap(newSchema);
+            } else {
+                ConvertableSchema<ConfigSchema> schemaNew = ConfigTransformer
+                    .throwIfInvalid(SchemaLoader.loadConvertableSchemaFromYaml(new ByteArrayInputStream(newSchema)));
+                ConfigSchema configSchemaNew = ConfigTransformer.throwIfInvalid(schemaNew.convert());
+                ConvertableSchema<ConfigSchema> schemaOld = ConfigTransformer
+                    .throwIfInvalid(SchemaLoader.loadConvertableSchemaFromYaml(new ByteBufferInputStream(currentConfigScheme)));
+                ConfigSchema configSchemaOld = ConfigTransformer.throwIfInvalid(schemaOld.convert());
+
+                configSchemaNew.setNifiPropertiesOverrides(configSchemaOld.getNifiPropertiesOverrides());
+
+                if (!overrideCoreProperties) {
+                    LOGGER.debug("Preserving previous core properties...");
+                    configSchemaNew.setCoreProperties(configSchemaOld.getCoreProperties());
+                }
+
+                if (!overrideSecurityProperties) {
+                    LOGGER.debug("Preserving previous security properties...");
+                    configSchemaNew.setSecurityProperties(configSchemaOld.getSecurityProperties());
+                }
+
+                StringWriter writer = new StringWriter();
+                SchemaLoader.toYaml(configSchemaNew, writer);
+                return ByteBuffer.wrap(writer.toString().getBytes()).asReadOnlyBuffer();
+            }
+        } catch (Exception e) {
+            throw new InvalidConfigurationException("Loading the old and the new schema for merging was not successful", e);
+        }
+    }
+
+    private static boolean overrideSecurityProperties(Properties properties) {
+        String overrideSecurityProperties = (String) properties.getOrDefault(OVERRIDE_SECURITY, "false");
+        return Boolean.parseBoolean(overrideSecurityProperties);
+    }
+
+    private static boolean overrideCoreProperties(Properties properties) {
+        String overrideCoreProps = (String) properties.getOrDefault(OVERRIDE_CORE_PROPERTIES_KEY, "false");
+        return Boolean.parseBoolean(overrideCoreProps);
     }
 
     public static final String PROPERTIES_FILE_APACHE_2_0_LICENSE =

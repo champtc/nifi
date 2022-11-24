@@ -20,6 +20,7 @@ import org.apache.nifi.registry.flow.VersionedFlowState;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -448,6 +449,7 @@ public class ProcessGroupStatus implements Cloneable {
             merged.setOutputCount(merged.getOutputCount() + statusToMerge.getOutputCount());
             merged.setOutputBytes(merged.getOutputBytes() + statusToMerge.getOutputBytes());
             merged.setFlowFileAvailability(mergeFlowFileAvailability(merged.getFlowFileAvailability(), statusToMerge.getFlowFileAvailability()));
+            merged.setLoadBalanceStatus(mergeLoadBalanceStatus(merged.getLoadBalanceStatus(), statusToMerge.getLoadBalanceStatus()));
         }
         target.setConnectionStatus(mergedConnectionMap.values());
 
@@ -585,6 +587,13 @@ public class ProcessGroupStatus implements Cloneable {
             merged.setSentContentSize(merged.getSentContentSize() + statusToMerge.getSentContentSize());
             merged.setSentCount(merged.getSentCount() + statusToMerge.getSentCount());
             merged.setActiveThreadCount(merged.getActiveThreadCount() + statusToMerge.getActiveThreadCount());
+
+            // Take the earliest last refresh time
+            final Date mergedLastRefreshTime = merged.getLastRefreshTime();
+            final Date toMergeLastRefreshTime = statusToMerge.getLastRefreshTime();
+            if (mergedLastRefreshTime == null || (toMergeLastRefreshTime != null && toMergeLastRefreshTime.before(mergedLastRefreshTime))) {
+                merged.setLastRefreshTime(toMergeLastRefreshTime);
+            }
         }
 
         target.setRemoteProcessGroupStatus(mergedRemoteGroupMap.values());
@@ -610,5 +619,27 @@ public class ProcessGroupStatus implements Cloneable {
         }
 
         return FlowFileAvailability.FLOWFILE_AVAILABLE;
+    }
+
+    public static LoadBalanceStatus mergeLoadBalanceStatus(final LoadBalanceStatus statusA, final LoadBalanceStatus statusB) {
+        if (statusA == statusB) {
+            return statusA;
+        }
+        if (statusA == null) {
+            return statusB;
+        }
+        if (statusB == null) {
+            return statusA;
+        }
+
+        if (statusA == LoadBalanceStatus.LOAD_BALANCE_ACTIVE || statusB == LoadBalanceStatus.LOAD_BALANCE_ACTIVE) {
+            return LoadBalanceStatus.LOAD_BALANCE_ACTIVE;
+        }
+
+        if (statusA == LoadBalanceStatus.LOAD_BALANCE_INACTIVE || statusB == LoadBalanceStatus.LOAD_BALANCE_INACTIVE) {
+            return LoadBalanceStatus.LOAD_BALANCE_INACTIVE;
+        }
+
+        return LoadBalanceStatus.LOAD_BALANCE_NOT_CONFIGURED;
     }
 }

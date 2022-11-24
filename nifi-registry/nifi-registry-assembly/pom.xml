@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.apache.nifi.registry</groupId>
         <artifactId>nifi-registry</artifactId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <artifactId>nifi-registry-assembly</artifactId>
     <packaging>pom</packaging>
@@ -48,6 +48,7 @@
                                 <descriptor>src/main/assembly/dependencies.xml</descriptor>
                             </descriptors>
                             <tarLongFileMode>posix</tarLongFileMode>
+                            <formats>zip</formats>
                         </configuration>
                     </execution>
                 </executions>
@@ -99,7 +100,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-property-utils</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi.registry</groupId>
@@ -123,7 +124,7 @@
             <groupId>org.apache.nifi.registry</groupId>
             <artifactId>nifi-registry-web-docs</artifactId>
             <type>war</type>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
         </dependency>
         <dependency>
             <groupId>org.apache.nifi.registry</groupId>
@@ -135,7 +136,7 @@
         <dependency>
             <groupId>org.apache.nifi.registry</groupId>
             <artifactId>nifi-registry-docs</artifactId>
-            <version>1.16.3</version>
+            <version>1.18.0</version>
             <classifier>resources</classifier>
             <scope>runtime</scope>
             <type>zip</type>
@@ -189,6 +190,7 @@
         <nifi.registry.registry.alias.configuration.file>./conf/registry-aliases.xml</nifi.registry.registry.alias.configuration.file>
 
         <!-- nifi-registry.properties: extension properties -->
+        <nifi.registry.extension.archive.type>zip</nifi.registry.extension.archive.type>
         <nifi.registry.extensions.working.directory>./work/extensions</nifi.registry.extensions.working.directory>
         <nifi.registry.extension.dir.aws />
 
@@ -391,10 +393,10 @@
                 <dependency>
                     <groupId>org.apache.nifi.registry</groupId>
                     <artifactId>nifi-registry-ranger-assembly</artifactId>
-                    <version>1.16.3</version>
+                    <version>1.18.0</version>
                     <classifier>bin</classifier>
                     <scope>runtime</scope>
-                    <type>zip</type>
+                    <type>${nifi.registry.extension.archive.type}</type>
                 </dependency>
             </dependencies>
             <build>
@@ -434,10 +436,10 @@
                 <dependency>
                     <groupId>org.apache.nifi.registry</groupId>
                     <artifactId>nifi-registry-aws-assembly</artifactId>
-                    <version>1.16.3</version>
+                    <version>1.18.0</version>
                     <classifier>bin</classifier>
                     <scope>runtime</scope>
-                    <type>zip</type>
+                    <type>${nifi.registry.extension.archive.type}</type>
                 </dependency>
             </dependencies>
             <build>
@@ -463,9 +465,83 @@
                 </plugins>
             </build>
         </profile>
+        <profile>
+            <id>targz</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <properties>
+                <nifi.registry.extension.archive.type>tar.gz</nifi.registry.extension.archive.type>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <configuration>
+                            <finalName>nifi-registry-${project.version}</finalName>
+                            <attach>false</attach>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>make shared resource</id>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <phase>package</phase>
+                                <configuration>
+                                    <archiverConfig>
+                                        <defaultDirectoryMode>0775</defaultDirectoryMode>
+                                        <directoryMode>0775</directoryMode>
+                                        <fileMode>0664</fileMode>
+                                    </archiverConfig>
+                                    <descriptors>
+                                        <descriptor>src/main/assembly/dependencies.xml</descriptor>
+                                    </descriptors>
+                                    <tarLongFileMode>posix</tarLongFileMode>
+                                    <formats>tar.gz</formats>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>dir-only</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <configuration>
+                            <finalName>nifi-registry-${project.version}</finalName>
+                            <attach>false</attach>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>make shared resource</id>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <phase>package</phase>
+                                <configuration>
+                                    <archiverConfig>
+                                        <defaultDirectoryMode>0775</defaultDirectoryMode>
+                                        <directoryMode>0775</directoryMode>
+                                        <fileMode>0664</fileMode>
+                                    </archiverConfig>
+                                    <descriptors>
+                                        <descriptor>src/main/assembly/dependencies.xml</descriptor>
+                                    </descriptors>
+                                    <formats>dir</formats>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>

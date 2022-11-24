@@ -17,16 +17,12 @@
     <parent>
         <artifactId>nifi-registry-extensions</artifactId>
         <groupId>org.apache.nifi.registry</groupId>
-        <version>1.16.3</version>
+        <version>1.18.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>nifi-registry-ranger</artifactId>
     <packaging>pom</packaging>
-
-    <properties>
-        <zookeeper.version>3.5.9</zookeeper.version>
-    </properties>
 
     <modules>
         <module>nifi-registry-ranger-assembly</module>
@@ -36,23 +32,11 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Override commons-io:2.5 from ranger -->
-            <dependency>
-                <groupId>commons-io</groupId>
-                <artifactId>commons-io</artifactId>
-                <version>2.10.0</version>
-            </dependency>
             <!-- Override commons-compress:1.19 from ranger -->
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-compress</artifactId>
                 <version>1.21</version>
-            </dependency>
-            <!-- Override snakeyaml:1.17 -->
-            <dependency>
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>1.29</version>
             </dependency>
             <!-- Override jetty-server:9.4.20 -->
             <dependency>
@@ -78,8 +62,4 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-  <scm>
-    <tag>nifi-1.16.3-RC1</tag>
-  </scm>
 </project>
