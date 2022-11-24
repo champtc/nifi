@@ -24,7 +24,9 @@ node {
 		}
 		
 		stage('Build Nifi Processors') {
-			javaUtils.runMavenBuild(pomFile, "-T2 -Dmaven.test.failure.ignore=true")
+			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
+            	sh '$M2_HOME/bin/mvn -T2 -Dmaven.test.failure.ignore=true clean install -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML -f ./pom.xml'
+        	}
 			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
             	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=openjdk -Ddocker.image.tag=11.0.12-jre -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML -f ./nifi-docker/dockermaven/pom.xml'
         	}
