@@ -36,8 +36,8 @@ node {
             	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=openjdk -Ddocker.image.tag=11.0.12-jre -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./nifi-docker/dockermaven/pom.xml'
         	}
 			docker.withRegistry("https://nexus.darklight.ai:8443", "NEXUS_DEPLOY_USER") {
-				def dockerImage = docker.image("apache/nifi:${env.POM_VERSION}-dockermaven")
-				dockerImage.push(env.POM_VERSION)
+				def dockerImage = docker.image("apache/nifi:1.18.0-dockermaven")
+				dockerImage.push("1.18.0")
 			}
 		}
 
