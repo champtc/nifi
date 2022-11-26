@@ -33,6 +33,7 @@ node {
 
 		stage('Build NiFi Docker Image') {
 			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
+				sh 'mkdir /build/nifi && sudo ln -s /build/nifi/ /opt/nifi'
             	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=openjdk -Ddocker.image.tag=11.0.12-jre -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./nifi-docker/dockermaven/pom.xml'
         	}
 		}
