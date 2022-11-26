@@ -26,9 +26,9 @@ node {
 		stage('Build Nifi') {
 			env.JAVA_HOME = tool 'OPEN_JDK_11'
 			env.NIFI_BASE_DIR = "/build/nifi/${env.BUILD_NUMBER}"
-			// configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
-            // 	sh '$M2_HOME/bin/mvn -T2 -Dmaven.test.failure.ignore=true clean install -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./pom.xml'
-        	// }
+			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
+             	sh '$M2_HOME/bin/mvn -T2 -Dmaven.test.failure.ignore=true clean install -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./pom.xml'
+        	}
 		}
 
 		stage('Build NiFi Docker Image') {
