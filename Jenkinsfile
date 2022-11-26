@@ -32,10 +32,10 @@ node {
 		}
 
 		stage('Build NiFi Docker Image') {
-			//configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
-            //	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=openjdk -Ddocker.image.tag=11.0.12-jre -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./nifi-docker/dockermaven/pom.xml'
-        	//}
-			docker.withRegistry("https://nexus.darklight.ai/repository/darklight-docker/", "NEXUS_DEPLOY_USER") {
+			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
+            	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=openjdk -Ddocker.image.tag=11.0.12-jre -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./nifi-docker/dockermaven/pom.xml'
+        	}
+			docker.withRegistry("https://nexus.darklight.ai/repository/darklight-docker/", "nexus-deploy-user") {
 				def dockerImage = docker.image("apache/nifi:${env.POM_VERSION}-dockermaven")
 				dockerImage.push(env.POM_VERSION)
 			}
