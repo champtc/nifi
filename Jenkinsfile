@@ -2,8 +2,8 @@
 
 node {
 	def pomFile
-	env.JRE_TAG = "11.0.17_8-jre";
-	env.JRE_NAME = "eclipse-temurin"
+	env.JRE_TAG = "11.0.12-jre" //"11.0.17_8-jre"
+	env.JRE_NAME = "openjdk" //"eclipse-temurin"
 
 	try {
 		// Checkout and notify start
