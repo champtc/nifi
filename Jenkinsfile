@@ -37,9 +37,9 @@ node {
 			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
             	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=$JRE_NAME -Ddocker.image.tag=$JRE_TAG -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --show-version -f ./nifi-docker/dockermaven/pom.xml'
         	}
-			docker.withRegistry("https://nexus.darklight.ai:8443", "NEXUS_DEPLOY_USER") {
-				def dockerImage = docker.image("apache/nifi:1.18.0-dockermaven")
-				dockerImage.push("1.18.0-jre-11.0-${env.COMMIT_ID}")
+			docker.withRegistry("${env.NEXUS_DOCKER_REGISTRY}", "NEXUS_DEPLOY_USER") {
+				def dockerImage = docker.image("apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
+				dockerImage.push("${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}")
 			}
 		}
 
