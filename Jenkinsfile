@@ -2,7 +2,8 @@
 
 node {
 	def pomFile
-	def jreVersion = "11.0.17_8-jre";
+	env.JRE_TAG = "11.0.17_8-jre";
+	env.JRE_NAME = "eclipse-temurin"
 
 	try {
 		// Checkout and notify start
@@ -34,7 +35,7 @@ node {
 
 		stage('Build NiFi Docker Image') {
 			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
-            	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=eclipse-temurin -Ddocker.image.tag=${jreVersion} -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./nifi-docker/dockermaven/pom.xml'
+            	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=$JRE_NAME -Ddocker.image.tag=$JRE_TAG -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --show-version -f ./nifi-docker/dockermaven/pom.xml'
         	}
 			docker.withRegistry("https://nexus.darklight.ai:8443", "NEXUS_DEPLOY_USER") {
 				def dockerImage = docker.image("apache/nifi:1.18.0-dockermaven")
