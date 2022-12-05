@@ -46,10 +46,10 @@ node {
 			}
 			docker.withRegistry("https://${env.DOCKER_REGISTRY}", "${env.DOCKER_REGISTRY_CREDS}") {
 				def image = docker.image("apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
-				dockerImage = "${env.DOCKER_REGISTRY}/apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
-				echo "IMAGE ID FOR TAG: ${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
+				dockerImage = "${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
 				image.push("${dockerImage}")
 				echo "IMAGE ID AFTER TAG: ${image.imageName()}"
+				currentBuild.description="Image: ${env.DOCKER_REGISTRY}/apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
 			}
 		}
 
@@ -63,7 +63,6 @@ node {
 		// Record results of build and junit tests
 		stage('Record Results') {
 			javaUtils.recordResultsForJavaMavenBuilds();
-			currentBuild.description="Image: ${dockerImage}"
 		}
 
 		// Archive built jars and fingerprint them
