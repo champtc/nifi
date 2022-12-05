@@ -47,8 +47,9 @@ node {
 			docker.withRegistry("https://${env.DOCKER_REGISTRY}", "${env.DOCKER_REGISTRY_CREDS}") {
 				def image = docker.image("apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
 				dockerImage = "${env.DOCKER_REGISTRY}/apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
+				echo "IMAGE ID FOR TAG: ${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
 				image.push("${dockerImage}")
-				echo "IMAGE ID: ${image.imageName()} "
+				echo "IMAGE ID AFTER TAG: ${image.imageName()}"
 			}
 		}
 
