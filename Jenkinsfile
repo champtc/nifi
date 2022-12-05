@@ -4,6 +4,7 @@ node {
 	def pomFile
 	env.JRE_TAG = "11.0.12-jre" //"11.0.17_8-jre"
 	env.JRE_NAME = "openjdk" //"eclipse-temurin"
+	def dockerImage = "UNKNOWN"
 
 	try {
 		// Checkout and notify start
@@ -27,7 +28,6 @@ node {
 		
 		stage('Build Nifi') {
 			env.JAVA_HOME = tool 'OPEN_JDK_11'
-			env.NIFI_BASE_DIR = "/build/nifi/${env.BUILD_NUMBER}"
 			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
              	sh '$M2_HOME/bin/mvn -T2 -Dmaven.test.failure.ignore=true clean install -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./pom.xml'
         	}
@@ -38,8 +38,9 @@ node {
             	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=$JRE_NAME -Ddocker.image.tag=$JRE_TAG -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --show-version -f ./nifi-docker/dockermaven/pom.xml'
         	}
 			docker.withRegistry("${env.NEXUS_DOCKER_REGISTRY}", "NEXUS_DEPLOY_USER") {
-				def dockerImage = docker.image("apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
-				dockerImage.push("${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}")
+				def image = docker.image("${env.NEXUS_DOCKER_REGISTRY}/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
+				dockerImage = "${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
+				image.push("${dockerImage}")
 			}
 		}
 
@@ -53,6 +54,7 @@ node {
 		// Record results of build and junit tests
 		stage('Record Results') {
 			javaUtils.recordResultsForJavaMavenBuilds();
+			currentBuild.description="Image: ${dockerImage}"
 		}
 
 		// Archive built jars and fingerprint them
