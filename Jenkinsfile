@@ -39,7 +39,7 @@ node {
 
 		stage('Build NiFi Docker Image') {
 			docker.withRegistry("https://${utils.NEXUS_MIRROR_REGISTRY}", "${utils.NEXUS_MIRROR_CREDS}") {
-				javaUtils.runMavenCommand("package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=${env.JRE_NAME} -Ddocker.image.tag=${env.JRE_TAG}", pomFile)
+				javaUtils.runMavenCommand("package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=${env.JRE_NAME} -Ddocker.image.tag=${env.JRE_TAG}", "./nifi-docker/dockermaven/pom.xml")
 				// configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
             	// 	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=$JRE_NAME -Ddocker.image.tag=$JRE_TAG -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --show-version -f ./nifi-docker/dockermaven/pom.xml'
         		// }
