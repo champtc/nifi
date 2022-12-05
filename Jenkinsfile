@@ -31,16 +31,20 @@ node {
 		
 		stage('Build Nifi') {
 			env.JAVA_HOME = tool 'OPEN_JDK_11'
-			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
-             	sh '$M2_HOME/bin/mvn -T2 -Dmaven.test.failure.ignore=true clean install -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./pom.xml'
-        	}
+			javaUtils.runMavenCommand("clean install -T2", pomFile)
+//			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
+//             	sh '$M2_HOME/bin/mvn -T2 -Dmaven.test.failure.ignore=true clean install -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --fail-at-end --show-version -f ./pom.xml'
+//        	}
 		}
 
 		stage('Build NiFi Docker Image') {
-			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
-            	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=$JRE_NAME -Ddocker.image.tag=$JRE_TAG -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --show-version -f ./nifi-docker/dockermaven/pom.xml'
-        	}
-			docker.withRegistry("${env.DOCKER_REGISTRY}", "${env.DOCKER_REGISTRY_CREDS}") {
+			docker.withRegistry("https://${utils.NEXUS_MIRROR_REGISTRY}", "${utils.NEXUS_MIRROR_CREDS}") {
+				javaUtils.runMavenCommand("package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=${env.JRE_NAME} -Ddocker.image.tag=${env.JRE_TAG}", pomFile)
+				// configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
+            	// 	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=$JRE_NAME -Ddocker.image.tag=$JRE_TAG -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --show-version -f ./nifi-docker/dockermaven/pom.xml'
+        		// }
+			}
+			docker.withRegistry("https://${env.DOCKER_REGISTRY}", "${env.DOCKER_REGISTRY_CREDS}") {
 				def image = docker.image("${env.DOCKER_REGISTRY}/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
 				dockerImage = "${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
 				image.push("${dockerImage}")
