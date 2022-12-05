@@ -1,6 +1,9 @@
 @Library('utils@dev') _
 
 node {
+	env.DOCKER_REGISTRY = utils.NEXUS_DOCKER_REGISTRY
+  	env.DOCKER_REGISTRY_CREDS = utils.NEXUS_DEPLOY_CREDS
+
 	def pomFile
 	env.JRE_TAG = "11.0.12-jre" //"11.0.17_8-jre"
 	env.JRE_NAME = "openjdk" //"eclipse-temurin"
@@ -37,8 +40,8 @@ node {
 			configFileProvider([configFile(fileId: 'P2_MAVEN_SETTINGS', variable: 'MAVEN_SETTINGS_XML'),configFile(fileId: 'TOOLCHAINS', replaceTokens: true, variable: 'TOOLCHAINS_SETTINGS_XML')]) {
             	sh '$M2_HOME/bin/mvn package -DskipTests -ff -nsu -Pdocker -Ddocker.image.name=$JRE_NAME -Ddocker.image.tag=$JRE_TAG -s $MAVEN_SETTINGS_XML -t $TOOLCHAINS_SETTINGS_XML --batch-mode --errors --show-version -f ./nifi-docker/dockermaven/pom.xml'
         	}
-			docker.withRegistry("${env.NEXUS_DOCKER_REGISTRY}", "NEXUS_DEPLOY_USER") {
-				def image = docker.image("${env.NEXUS_DOCKER_REGISTRY}/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
+			docker.withRegistry("${env.DOCKER_REGISTRY}", "${env.DOCKER_REGISTRY_CREDS}") {
+				def image = docker.image("${env.DOCKER_REGISTRY}/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
 				dockerImage = "${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
 				image.push("${dockerImage}")
 			}
