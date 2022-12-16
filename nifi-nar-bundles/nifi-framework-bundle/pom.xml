@@ -103,12 +103,12 @@
             <dependency>
                 <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-framework-cluster-protocol</artifactId>
-                <version>1.19.0-SNAPSHOT</version>
+                <version>1.19.1</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-framework-cluster</artifactId>
-                <version>1.19.0-SNAPSHOT</version>
+                <version>1.19.1</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.nifi</groupId>
