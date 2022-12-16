@@ -48,8 +48,7 @@ node {
 				def image = docker.image("apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-dockermaven")
 				dockerImage = "${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
 				image.push("${dockerImage}")
-				echo "IMAGE ID AFTER TAG: ${image.imageName()}"
-				currentBuild.description="Image: ${env.DOCKER_REGISTRY}/apache/nifi:${env.COMMON_BUILD_VERSION_SHORT}-jre-11.0-${env.COMMIT_ID}"
+				currentBuild.description="Image: ${image.imageName()}"
 			}
 		}
 
