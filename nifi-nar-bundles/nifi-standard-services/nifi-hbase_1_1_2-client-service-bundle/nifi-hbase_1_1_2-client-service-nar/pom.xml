@@ -39,7 +39,7 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-hbase_1_1_2-client-service</artifactId>
-            <version>1.19.0-SNAPSHOT</version>
+            <version>1.19.1</version>
         </dependency>
     </dependencies>
 </project>
