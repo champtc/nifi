@@ -73,7 +73,7 @@
         <dependency>
             <groupId>org.janusgraph</groupId>
             <artifactId>janusgraph-core</artifactId>
-            <version>0.5.3</version>
+            <version>1.0.0-20230128-125913.49b8bf4</version>
             <exclusions>
                 <exclusion>
                     <groupId>commons-logging</groupId>
