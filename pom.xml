@@ -15,7 +15,7 @@
         <groupId>org.apache</groupId>
         <artifactId>apache</artifactId>
         <version>27</version>
-        <relativePath />
+        <relativePath/>
     </parent>
     <groupId>org.apache.nifi</groupId>
     <artifactId>nifi</artifactId>
@@ -94,7 +94,7 @@
         <maven.compiler.showDeprecation>true</maven.compiler.showDeprecation>
         <!-- Set minimum Java version for maven-enforcer-plugin from parent POM -->
         <minimalJavaBuildVersion>1.8.0-251</minimalJavaBuildVersion>
-        <maven.surefire.arguments />
+        <maven.surefire.arguments/>
         <!-- Disable maven-site-plugin from parent POM -->
         <maven.site.skip>true</maven.site.skip>
         <node.version>v16.13.2</node.version>
@@ -146,7 +146,7 @@
         <spring.security.version>5.7.5</spring.security.version>
         <swagger.annotations.version>1.6.6</swagger.annotations.version>
         <h2.version>2.1.214</h2.version>
-        <zookeeper.version>3.8.0</zookeeper.version>
+        <zookeeper.version>3.8.1</zookeeper.version>
     </properties>
     <dependencyManagement>
         <dependencies>
