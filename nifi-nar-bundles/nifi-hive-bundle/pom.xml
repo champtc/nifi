@@ -107,7 +107,7 @@
     </dependencyManagement>
 
     <properties>
-        <hive11.version>1.1.1</hive11.version>
+        <hive11.version>2.3.8</hive11.version>
         <hive11.hadoop.version>2.6.2</hive11.hadoop.version>
         <hive12.version>1.2.2</hive12.version>
         <hive12.hadoop.version>2.6.2</hive12.hadoop.version>
