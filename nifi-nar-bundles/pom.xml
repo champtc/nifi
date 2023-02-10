@@ -143,7 +143,7 @@
                     <doUpdate>false</doUpdate>
                     <shortRevisionLength>7</shortRevisionLength>
                     <getRevisionOnlyOnce>true</getRevisionOnlyOnce>
-                    <revisionOnScmFailure />
+                    <revisionOnScmFailure/>
                     <buildNumberPropertyName>buildRevision</buildNumberPropertyName>
                     <scmBranchPropertyName>buildBranch</scmBranchPropertyName>
                 </configuration>
@@ -162,8 +162,8 @@
                 </file>
             </activation>
             <properties>
-                <buildRevision />
-                <buildBranch />
+                <buildRevision/>
+                <buildBranch/>
             </properties>
         </profile>
         <profile>
@@ -185,7 +185,7 @@
             <dependency>
                 <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-distributed-cache-client-service</artifactId>
-                <version>1.19.0-SNAPSHOT</version>
+                <version>1.20.0</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.nifi</groupId>
