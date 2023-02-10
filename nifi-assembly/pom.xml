@@ -40,7 +40,7 @@ language governing permissions and limitations under the License. -->
                             <stripVersion>true</stripVersion>
                             <silent>true</silent>
                             <fileMappers>
-                                <org.codehaus.plexus.components.io.filemappers.FlattenFileMapper />
+                                <org.codehaus.plexus.components.io.filemappers.FlattenFileMapper/>
                             </fileMappers>
                         </configuration>
                     </execution>
@@ -236,7 +236,7 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-distributed-cache-services-nar</artifactId>
-            <version>1.19.0-SNAPSHOT</version>
+            <version>1.20.0</version>
             <type>nar</type>
         </dependency>
         <dependency>
@@ -248,7 +248,7 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-standard-nar</artifactId>
-            <version>1.19.0-SNAPSHOT</version>
+            <version>1.20.0</version>
             <type>nar</type>
         </dependency>
         <dependency>
@@ -391,7 +391,7 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-solr-nar</artifactId>
-            <version>1.19.0-SNAPSHOT</version>
+            <version>1.20.0</version>
             <type>nar</type>
         </dependency>
         <dependency>
@@ -517,7 +517,7 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-azure-nar</artifactId>
-            <version>1.19.0-SNAPSHOT</version>
+            <version>1.20.0</version>
             <type>nar</type>
         </dependency>
         <dependency>
@@ -721,7 +721,7 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-gcp-nar</artifactId>
-            <version>1.19.0-SNAPSHOT</version>
+            <version>1.20.0</version>
             <type>nar</type>
         </dependency>
         <dependency>
@@ -793,7 +793,7 @@ language governing permissions and limitations under the License. -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-hazelcast-services-nar</artifactId>
-            <version>1.19.0-SNAPSHOT</version>
+            <version>1.20.0</version>
             <type>nar</type>
         </dependency>
         <dependency>
