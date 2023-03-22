@@ -15,7 +15,7 @@
         <groupId>org.apache</groupId>
         <artifactId>apache</artifactId>
         <version>29</version>
-        <relativePath />
+        <relativePath/>
     </parent>
     <groupId>org.apache.nifi</groupId>
     <artifactId>nifi</artifactId>
@@ -94,7 +94,7 @@
         <maven.compiler.showDeprecation>true</maven.compiler.showDeprecation>
         <!-- Set minimum Java version for maven-enforcer-plugin from parent POM -->
         <minimalJavaBuildVersion>11.0.16</minimalJavaBuildVersion>
-        <maven.surefire.arguments />
+        <maven.surefire.arguments/>
         <!-- Disable maven-site-plugin from parent POM -->
         <maven.site.skip>true</maven.site.skip>
         <node.version>v16.13.2</node.version>
@@ -132,7 +132,7 @@
         <surefire.version>3.0.0-M8</surefire.version>
         <!-- The Hadoop version used by nifi-hadoop-libraries-nar and any NARs that depend on it, other NARs that need
             a specific version should override this property, or use a more specific property like abc.hadoop.version -->
-        <hadoop.version>3.3.4</hadoop.version>
+        <hadoop.version>3.3.5</hadoop.version>
         <ozone.version>1.2.1</ozone.version>
         <gcs.version>2.1.5</gcs.version>
         <aspectj.version>1.9.19</aspectj.version>
@@ -989,7 +989,7 @@
                         </goals>
                         <configuration>
                             <rules>
-                                <banDuplicatePomDependencyVersions />
+                                <banDuplicatePomDependencyVersions/>
                                 <requireSameVersions>
                                     <plugins>
                                         <plugin>org.apache.maven.plugins:maven-surefire-plugin</plugin>
